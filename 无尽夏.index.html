@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>G-System::Flora_Topology</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* 基础动画体系 */
+  @keyframes breathe {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+  }
+  .animate-breathe { animation: breathe 8s ease-in-out infinite; }
+  
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-up { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  }
+
+  /* 物理环境特效 */
+  @keyframes rainfall {
+    0% { transform: translateY(-10vh) rotate(15deg); opacity: 0; }
+    10% { opacity: 0.5; }
+    90% { opacity: 0.5; }
+    100% { transform: translateY(110vh) rotate(15deg); opacity: 0; }
+  }
+  .rain-drop {
+    position: absolute; width: 2px; height: 60px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.8));
+    animation: rainfall linear infinite;
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 0.8; transform: scale(1.2); }
+  }
+  .star {
+    position: absolute; background: white; border-radius: 50%;
+    animation: twinkle ease-in-out infinite;
+  }
+  
+  /* 滚动条隐藏与美化 */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+
+  /* 移动端防双击放大等默认行为 */
+  button { touch-action: manipulation; }
+</style>
+</head>
+<body class="font-sans overflow-hidden selection:bg-rose-200">
+  <!-- 容器挂载点 -->
+  <div id="app" class="min-h-screen w-full flex flex-col md:flex-row transition-colors duration-1000 from-indigo-50 via-pink-50 to-amber-50 bg-gradient-to-br relative">
+    
+    <!-- 动态环境图层容器 -->
+    <div id="env-layer" class="absolute inset-0 z-0 pointer-events-none overflow-hidden"></div>
+
+    <!-- 左侧：平面展台区 -->
+    <div class="flex-1 relative flex items-center justify-center p-4 md:p-8 min-h-[45vh] md:min-h-screen z-10 overflow-hidden">
+      <div class="relative w-full max-w-4xl flex flex-col items-center justify-center">
+        <!-- 蕾丝底布 -->
+        <div id="lace-base" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[22rem] h-[22rem] md:w-[30rem] md:h-[30rem] rounded-full border-4 border-dashed opacity-50 z-0 transition-colors duration-1000 border-white bg-white/40" style="box-shadow: 0 0 20px rgba(0,0,0,0.05) inset">
+           <div id="lace-inner" class="absolute top-4 left-4 right-4 bottom-4 rounded-full border-2 border-dotted opacity-60 transition-colors duration-1000 border-white"></div>
+        </div>
+        <!-- 花卉平铺区 -->
+        <div id="display-area" class="relative z-10 w-full min-h-[200px] md:h-80 flex items-center justify-center gap-2 md:gap-4 flex-wrap px-2 md:px-4">
+          <div id="empty-state" class="font-serif tracking-widest text-sm absolute text-center animate-pulse text-slate-400/60">
+            [ 展台空置 : 等待铺设 ]
+          </div>
+        </div>
+      </div>
+      <!-- 状态监控 -->
+      <div class="absolute top-4 left-4 md:top-6 md:left-6 text-[10px] md:text-xs tracking-widest flex flex-col gap-1 text-slate-500 transition-colors duration-1000" id="status-text">
+        <span class="uppercase">G-System::Flat_Topology</span>
+        <span class="uppercase">Audio: Web Audio API</span>
+        <span class="uppercase" id="cap-status">Cap: 0/8</span>
+      </div>
+    </div>
+
+    <!-- 右侧：控制台 -->
+    <div id="control-panel" class="w-full md:w-[380px] flex-shrink-0 z-20 flex flex-col p-4 md:p-8 shadow-2xl h-[55vh] md:h-screen transition-colors duration-1000 glass-panel border-l border-white/60 text-slate-700 rounded-t-3xl md:rounded-none bg-white/40 md:bg-transparent">
+      
+      <!-- 头部与 API 配置 -->
+      <div class="mb-4 flex flex-col gap-2 flex-shrink-0">
+        <div class="flex justify-between items-end">
+          <div>
+            <h1 class="text-xl md:text-2xl font-serif mb-1 tracking-wider transition-colors duration-1000" id="title-text">实体字典区</h1>
+          </div>
+          <button id="btn-clear" class="text-xs transition-colors border-b border-transparent pb-1 text-slate-400 hover:text-rose-500 hover:border-rose-300">
+            [ 格式化 ]
+          </button>
+        </div>
+        
+        <!-- API 物理密钥孔 -->
+        <div class="flex items-center gap-2 bg-black/5 rounded-lg p-1.5 border border-black/10 transition-colors duration-1000" id="api-container">
+          <svg class="w-4 h-4 text-slate-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+          <input type="password" id="api-key-input" placeholder="输入 Deepseek API Key" class="bg-transparent text-xs outline-none flex-1 placeholder-slate-400/70 text-slate-600 font-mono tracking-wider w-full">
+        </div>
+      </div>
+
+      <!-- 字典网格 -->
+      <div class="overflow-y-auto pr-1 mb-4 flex-shrink-0 max-h-[25vh] md:max-h-[35vh]">
+        <div class="grid grid-cols-2 gap-2 pb-2" id="flower-buttons">
+          <!-- 按钮由 JS 渲染 -->
+        </div>
+      </div>
+
+      <!-- 环境变量控制 -->
+      <div class="mb-3 flex-shrink-0">
+        <h3 class="text-[10px] md:text-xs font-bold tracking-widest uppercase mb-2 transition-colors duration-1000 text-slate-500" id="env-title">[ 物理环境变量 ]</h3>
+        <div class="flex gap-2">
+          <button class="env-btn flex-1 py-1.5 rounded-lg text-xs tracking-wider transition-all bg-indigo-100 text-indigo-700 font-bold" data-env="day">☀️ 恒温</button>
+          <button class="env-btn flex-1 py-1.5 rounded-lg text-xs tracking-wider transition-all bg-white/50 text-slate-500" data-env="rain">🌧️ 湿度</button>
+          <button class="env-btn flex-1 py-1.5 rounded-lg text-xs tracking-wider transition-all bg-white/50 text-slate-500" data-env="night">🌌 暗物质</button>
+        </div>
+      </div>
+
+      <!-- 状态与推演触发 -->
+      <div class="flex justify-between items-center mb-2 min-h-[28px] flex-shrink-0">
+        <span id="limit-warning" class="text-[10px] md:text-xs px-2 py-1 rounded-full border transition-opacity duration-300 opacity-0 text-rose-500/80 bg-rose-50/50 border-rose-100">
+          ⚠ 承载上限(8)已达。
+        </span>
+        <button id="btn-analyze" class="hidden text-[10px] md:text-xs font-bold tracking-widest uppercase px-3 py-1.5 rounded-full border transition-all duration-300 bg-indigo-500/10 text-indigo-700 border-indigo-200 hover:bg-indigo-500 hover:text-white shadow-sm">
+          ✨ 发起共振
+        </button>
+      </div>
+
+      <!-- 释义与推演反馈区 -->
+      <div class="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 pb-4" id="info-area">
+        <!-- 初始占位 -->
+        <div id="initial-info" class="h-full min-h-[80px] flex items-center justify-center border-2 border-dashed rounded-xl p-4 border-slate-300/50 bg-white/20 transition-colors duration-1000">
+          <p class="text-xs tracking-wider text-center font-serif text-slate-400/80 transition-colors duration-1000" id="initial-text">
+            终端已启动。<br>填入 Key，或直接开始摆放。
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+/**
+ * G-System 核心逻辑重构 (Vanilla JS)
+ */
+
+// 1. 数据字典 (保持不变，提取渲染逻辑)
+const FLOWER_DATA = [
+  { id: 'rose', name: '红丝绒玫瑰', color: '#9f1239', freq: 261.63, language: '热烈、无畏的爱与余烬', poem: '“名字有什么关系？把玫瑰叫成别的名字，它还是一样的芬芳。”\n——莎士比亚', svg: '<path d="M50,100 C45,130 55,170 50,200" stroke="#166534" stroke-width="4" fill="none" class="drop-shadow-sm" /><path d="M50,130 C30,120 40,140 50,150" stroke="#166534" stroke-width="2" fill="none" /><path d="M50,140 Q65,130 70,145 Q55,150 50,140" fill="#15803d" /><path d="M50,160 Q35,150 30,165 Q45,170 50,160" fill="#166534" /><circle cx="50" cy="70" r="25" fill="{color}" opacity="0.9" /><circle cx="50" cy="65" r="20" fill="#be123c" opacity="0.9" /><circle cx="50" cy="60" r="12" fill="#e11d48" /><path d="M30,65 Q50,90 70,65 Q50,45 30,65" fill="#881337" opacity="0.5"/>' },
+  { id: 'tulip_blue', name: '碎冰蓝郁金香', color: '#0ea5e9', freq: 293.66, language: '无尽的宁静与永恒的注视', poem: '“兰陵美酒郁金香，玉碗盛来琥珀光。”\n——李白', svg: '<path d="M50,100 C55,140 45,170 50,200" stroke="#166534" stroke-width="4" fill="none" /><path d="M50,180 Q20,100 45,120" stroke="#15803d" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.8"/><path d="M50,160 Q80,90 55,110" stroke="#166534" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.7"/><path d="M30,50 C30,100 70,100 70,50 C60,35 50,60 40,35 C35,40 30,45 30,50 Z" fill="{color}" /><path d="M40,45 C45,70 55,70 60,45 C55,55 45,55 40,45 Z" fill="#38bdf8" />' },
+  { id: 'sunflower', name: '梵高向日葵', color: '#eab308', freq: 329.63, language: '沉默的重力与绝对的偏爱', poem: '“更无柳絮因风起，惟有葵花向日倾。”\n——司马光', svg: '<path d="M50,100 C48,150 52,180 50,200" stroke="#4d7c0f" stroke-width="5" fill="none" /><path d="M50,150 Q75,140 80,160 Q60,165 50,150" fill="#4d7c0f" />' + Array.from({length:12}).map((_,i) => `<ellipse cx="50" cy="35" rx="8" ry="30" fill="{color}" transform="rotate(${i*30} 50 65)" />`).join('') + '<circle cx="50" cy="65" r="22" fill="#713f12" /><circle cx="50" cy="65" r="18" fill="#422006" stroke="#854d0e" stroke-width="2" stroke-dasharray="2 2" />' },
+  { id: 'lily', name: '月影百合', color: '#f8fafc', freq: 349.23, language: '独立、庄严与自我重构', poem: '“尔丛香百合，一架粉长春。”\n——陆游', svg: '<path d="M50,100 C52,140 48,170 50,200" stroke="#15803d" stroke-width="4" fill="none" /><path d="M50,140 Q25,130 20,140 Q40,150 50,140" fill="#166534" /><path d="M50,70 C20,30 10,70 50,90 C90,70 80,30 50,70 Z" fill="{color}" stroke="#cbd5e1" stroke-width="1" /><path d="M50,80 C30,40 30,100 50,100 C70,100 70,40 50,80 Z" fill="#f1f5f9" /><path d="M45,85 Q40,60 35,55" stroke="#fbbf24" stroke-width="1.5" fill="none" /><circle cx="35" cy="55" r="2" fill="#b45309" /><path d="M50,85 Q50,55 50,50" stroke="#fbbf24" stroke-width="1.5" fill="none" /><circle cx="50" cy="50" r="2" fill="#b45309" /><path d="M55,85 Q60,60 65,55" stroke="#fbbf24" stroke-width="1.5" fill="none" /><circle cx="65" cy="55" r="2" fill="#b45309" />' },
+  { id: 'forgetmenot', name: '勿忘我', color: '#60a5fa', freq: 415.30, language: '永恒的记忆与微小的顽强', poem: '“请将我留在你的记忆里，就像星光留在水面上。”', svg: '<path d="M50,100 C52,140 48,170 50,200" stroke="#22c55e" stroke-width="3" fill="none" /><path d="M50,120 Q30,100 25,80" stroke="#16a34a" stroke-width="2" fill="none" /><path d="M50,140 Q70,110 75,90" stroke="#16a34a" stroke-width="2" fill="none" /><path d="M50,160 Q35,130 30,110" stroke="#16a34a" stroke-width="2" fill="none" />' + [{x:50,y:50},{x:45,y:40},{x:55,y:45},{x:48,y:30},{x:25,y:80},{x:20,y:70},{x:30,y:75},{x:75,y:90},{x:70,y:80},{x:80,y:85},{x:30,y:110},{x:25,y:100}].map(p => `<g transform="translate(${p.x-5},${p.y-5}) scale(0.6)">${Array.from({length:5}).map((_,i) => `<circle cx="5" cy="1" r="3" fill="{color}" transform="rotate(${i*72} 5 5)" />`).join('')}<circle cx="5" cy="5" r="1.5" fill="#fde047" /><circle cx="5" cy="5" r="0.5" fill="#f59e0b" /></g>`).join('') },
+  { id: 'lavender', name: '普罗旺斯薰衣草', color: '#8b5cf6', freq: 493.88, language: '等待爱情与嗅觉深处的镇定剂', poem: '“我的心是旷野的鸟，在你的眼睛里找到了它的天空。”\n——泰戈尔', svg: '<path d="M50,180 C49,150 51,120 50,90" stroke="#65a30d" stroke-width="3" fill="none" /><path d="M50,200 L50,180" stroke="#4d7c0f" stroke-width="4" fill="none" /><path d="M50,160 Q35,150 40,130" stroke="#4d7c0f" stroke-width="2" fill="none" /><path d="M50,140 Q65,130 60,110" stroke="#4d7c0f" stroke-width="2" fill="none" />' + Array.from({length:20}).map((_,i)=>{let y=90-i*3.5,o=i%2===0?-2:2,s=2+Math.random()*1.5;return `<ellipse cx="${50+o}" cy="${y}" rx="${s}" ry="${s*1.5}" fill="{color}" opacity="${0.8+Math.random()*0.2}" transform="rotate(${o*15} ${50+o} ${y})" />`}).join('') + Array.from({length:15}).map((_,i)=>{let y=85-i*4,o=i%2===0?3:-3,s=1.5+Math.random()*1.5;return `<ellipse cx="${50+o}" cy="${y}" rx="${s}" ry="${s*1.2}" fill="#c4b5fd" opacity="0.9" transform="rotate(${o*20} ${50+o} ${y})" />`}).join('') },
+  { id: 'endless_summer_blue', name: '无尽夏(酸性蓝)', color: '#3b82f6', freq: 392.00, language: '铝离子置换出的梦幻与坚韧', poem: '“夏天永远不会结束，只要土壤里还有记忆的酸度。”', svg: '<path d="M50,100 C47,150 53,170 50,200" stroke="#166534" stroke-width="6" fill="none" /><path d="M50,130 Q75,110 85,130 Q60,145 50,130" fill="#15803d" /><path d="M50,150 Q25,130 15,150 Q40,165 50,150" fill="#14532d" /><circle cx="50" cy="60" r="38" fill="#eff6ff" opacity="0.6" />' + Array.from({length:30}).map(()=>{let cx=50+(Math.random()-0.5)*55,cy=60+(Math.random()-0.5)*55,r=5+Math.random()*5,fc=['#93c5fd','#60a5fa','#3b82f6','#2563eb'][Math.floor(Math.random()*4)];return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fc}" opacity="0.85" />`}).join('') },
+  { id: 'endless_summer_purple', name: '无尽夏(中性紫)', color: '#a855f7', freq: 415.30, language: '酸碱平衡间的犹豫与温柔妥协', poem: '“介于冰冷与炽热之间，是漫长白昼的叹息。”', svg: '<path d="M50,100 C47,150 53,170 50,200" stroke="#166534" stroke-width="6" fill="none" /><path d="M50,130 Q75,110 85,130 Q60,145 50,130" fill="#15803d" /><path d="M50,150 Q25,130 15,150 Q40,165 50,150" fill="#14532d" /><circle cx="50" cy="60" r="38" fill="#f3e8ff" opacity="0.6" />' + Array.from({length:30}).map(()=>{let cx=50+(Math.random()-0.5)*55,cy=60+(Math.random()-0.5)*55,r=5+Math.random()*5,fc=['#d8b4fe','#c084fc','#a855f7','#7dd3fc'][Math.floor(Math.random()*4)];return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fc}" opacity="0.85" />`}).join('') },
+  { id: 'endless_summer_pink', name: '无尽夏(碱性粉)', color: '#ec4899', freq: 440.00, language: '抽离金属后的热烈与新生', poem: '“剔除沉重的外壳，以最鲜艳的姿态覆盖旧日的白墙。”', svg: '<path d="M50,100 C47,150 53,170 50,200" stroke="#166534" stroke-width="6" fill="none" /><path d="M50,130 Q75,110 85,130 Q60,145 50,130" fill="#15803d" /><path d="M50,150 Q25,130 15,150 Q40,165 50,150" fill="#14532d" /><circle cx="50" cy="60" r="38" fill="#fce7f3" opacity="0.6" />' + Array.from({length:30}).map(()=>{let cx=50+(Math.random()-0.5)*55,cy=60+(Math.random()-0.5)*55,r=5+Math.random()*5,fc=['#f9a8d4','#f472b6','#ec4899','#db2777'][Math.floor(Math.random()*4)];return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fc}" opacity="0.85" />`}).join('') },
+  { id: 'eustoma', name: '洋桔梗', color: '#86efac', freq: 523.25, language: '无刺的包容与真诚不变的底色', poem: '“我将于茫茫人海中访我唯一灵魂之伴侣；得之，我幸；不得，我命。”\n——徐志摩', svg: '<path d="M50,100 C55,130 45,170 50,200" stroke="#22c55e" stroke-width="3" fill="none" /><path d="M50,160 Q70,140 60,120 Q55,140 50,160" fill="#16a34a" opacity="0.7"/><path d="M50,140 Q30,120 40,100 Q45,120 50,140" fill="#15803d" opacity="0.7"/><path d="M50,80 C25,60 30,30 50,50 C70,30 75,60 50,80 Z" fill="#bbf7d0" /><path d="M50,85 C15,70 20,40 50,60 C80,40 85,70 50,85 Z" fill="#86efac" opacity="0.8"/><path d="M50,75 C35,55 40,35 50,45 C60,35 65,55 50,75 Z" fill="#dcfce3" /><circle cx="50" cy="55" r="4" fill="#fde047" />' }
+];
+
+// 2. 状态管理
+const state = {
+  bouquet: [],
+  environment: 'day', // 'day', 'rain', 'night'
+  maxCapacity: 8,
+  audioCtx: null,
+  isAnalyzing: false
+};
+
+// 3. DOM 节点引用
+const els = {
+  btnGroup: document.getElementById('flower-buttons'),
+  displayArea: document.getElementById('display-area'),
+  emptyState: document.getElementById('empty-state'),
+  capStatus: document.getElementById('cap-status'),
+  limitWarning: document.getElementById('limit-warning'),
+  btnAnalyze: document.getElementById('btn-analyze'),
+  infoArea: document.getElementById('info-area'),
+  initialInfo: document.getElementById('initial-info'),
+  envLayer: document.getElementById('env-layer'),
+  app: document.getElementById('app'),
+  envBtns: document.querySelectorAll('.env-btn'),
+  btnClear: document.getElementById('btn-clear'),
+  apiKeyInput: document.getElementById('api-key-input')
+};
+
+// 4. 音频系统 (按需初始化，规避浏览器自动播放限制)
+function initAudio() {
+  if (!state.audioCtx) {
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
+}
+
+function playTone(freq) {
+  initAudio();
+  const ctx = state.audioCtx;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + 1.5);
+}
+
+// 5. 渲染系统
+function renderButtons() {
+  els.btnGroup.innerHTML = FLOWER_DATA.map(f => `
+    <button data-id="${f.id}" class="flower-btn group relative p-2 md:p-2.5 rounded-xl text-left transition-all duration-300 shadow-sm hover:shadow-md overflow-hidden border bg-white/50 hover:bg-white/80 border-white/60">
+      <div class="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300" style="background-color: ${f.color}"></div>
+      <div class="flex items-center gap-2 relative z-10">
+        <span class="w-2.5 h-2.5 rounded-full shadow-inner flex-shrink-0" style="background-color: ${f.color}"></span>
+        <span class="font-medium tracking-wide text-[10px] md:text-[11px] truncate text-slate-800">${f.name}</span>
+      </div>
+    </button>
+  `).join('');
+
+  document.querySelectorAll('.flower-btn').forEach(btn => {
+    // 兼容触摸与点击
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const flower = FLOWER_DATA.find(f => f.id === btn.dataset.id);
+      handleInject(flower);
+    });
+  });
+}
+
+function handleInject(flower) {
+  playTone(flower.freq);
+  showInfoCard(flower);
+  
+  if (state.bouquet.length < state.maxCapacity) {
+    const item = { ...flower, uid: Date.now() + Math.random() };
+    state.bouquet.push(item);
+    renderDisplay();
+    updateStatus();
+  }
+}
+
+function renderDisplay() {
+  if (state.bouquet.length > 0) {
+    els.emptyState.style.display = 'none';
+    els.btnAnalyze.classList.remove('hidden');
+  } else {
+    els.emptyState.style.display = 'block';
+    els.btnAnalyze.classList.add('hidden');
+  }
+
+  // 只追加新元素，避免重绘闪烁
+  const currentCount = els.displayArea.querySelectorAll('.flower-item').length;
+  for (let i = currentCount; i < state.bouquet.length; i++) {
+    const item = state.bouquet[i];
+    const div = document.createElement('div');
+    div.className = 'flower-item w-20 h-40 md:w-24 md:h-48 animate-fade-up';
+    div.innerHTML = `<svg viewBox="0 0 100 200" class="w-full h-full drop-shadow-md">${item.svg.replace(/\{color\}/g, item.color)}</svg>`;
+    if(state.environment === 'night') div.classList.add('brightness-75');
+    els.displayArea.appendChild(div);
+  }
+}
+
+function showInfoCard(flower) {
+  if (els.initialInfo) els.initialInfo.style.display = 'none';
+  
+  // 移除旧属性卡片（如果有）
+  const oldCard = document.getElementById('prop-card');
+  if (oldCard) oldCard.remove();
+
+  const isDark = state.environment === 'night';
+  const card = document.createElement('div');
+  card.id = 'prop-card';
+  card.className = `animate-fade-up backdrop-blur-md rounded-xl md:rounded-2xl p-3 md:p-4 border shadow-sm relative overflow-hidden flex-shrink-0 ${isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-white/60 border-white/80'}`;
+  card.innerHTML = `
+    <div class="mb-2 md:mb-3 relative z-10">
+      <h3 class="text-[9px] md:text-[10px] font-bold tracking-widest uppercase mb-1 border-b pb-1 flex justify-between ${isDark ? 'text-slate-400 border-slate-700' : 'text-slate-500 border-slate-200'}">
+        <span>[ ${flower.name} :: 属性 ]</span>
+        <span>${flower.freq} Hz</span>
+      </h3>
+      <p class="font-medium tracking-wide text-[10px] md:text-xs mt-1 md:mt-2 ${isDark ? 'text-slate-200' : 'text-slate-800'}">${flower.language}</p>
+    </div>
+    <div class="relative z-10">
+      <div class="pl-2 border-l-2" style="border-color: ${flower.color}">
+        <p class="font-serif leading-relaxed text-[10px] md:text-[11px] whitespace-pre-line italic ${isDark ? 'text-slate-300' : 'text-slate-600'}">${flower.poem}</p>
+      </div>
+    </div>
+  `;
+  els.infoArea.insertBefore(card, els.infoArea.firstChild);
+}
+
+function updateStatus() {
+  els.capStatus.textContent = `Cap: ${state.bouquet.length}/${state.maxCapacity}`;
+  
+  const btns = document.querySelectorAll('.flower-btn');
+  if (state.bouquet.length >= state.maxCapacity) {
+    els.limitWarning.classList.remove('opacity-0');
+    els.limitWarning.classList.add('opacity-100');
+    btns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
+  } else {
+    els.limitWarning.classList.add('opacity-0');
+    els.limitWarning.classList.remove('opacity-100');
+    btns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
+  }
+}
+
+// 6. 环境切换系统
+function setEnvironment(env) {
+  state.environment = env;
+  const isDark = env === 'night';
+  
+  // 更新按钮状态
+  els.envBtns.forEach(b => {
+    if (b.dataset.env === env) {
+      b.className = `env-btn flex-1 py-1.5 rounded-lg text-xs tracking-wider transition-all ${isDark ? 'bg-indigo-900 text-indigo-200 border border-indigo-700' : (env==='day'?'bg-indigo-100 text-indigo-700':'bg-blue-100 text-blue-700')} font-bold`;
+    } else {
+      b.className = `env-btn flex-1 py-1.5 rounded-lg text-xs tracking-wider transition-all ${isDark ? 'bg-slate-800/50 text-slate-400' : 'bg-white/50 text-slate-500'}`;
+    }
+  });
+
+  // 更新全局颜色
+  els.app.className = `min-h-screen w-full flex flex-col md:flex-row transition-colors duration-1000 bg-gradient-to-br relative ${env === 'night' ? 'from-slate-900 via-indigo-950 to-slate-900' : env === 'rain' ? 'from-slate-400 via-slate-300 to-slate-400' : 'from-indigo-50 via-pink-50 to-amber-50'}`;
+  
+  const controlPanel = document.getElementById('control-panel');
+  controlPanel.className = `w-full md:w-[380px] flex-shrink-0 z-20 flex flex-col p-4 md:p-8 shadow-2xl h-[55vh] md:h-screen transition-colors duration-1000 border-l rounded-t-3xl md:rounded-none ${isDark ? 'bg-slate-900/60 border-slate-700/50 backdrop-blur-xl text-slate-300' : 'glass-panel border-white/60 text-slate-700 bg-white/40 md:bg-transparent'}`;
+  
+  document.getElementById('title-text').className = `text-xl md:text-2xl font-serif mb-1 tracking-wider transition-colors duration-1000 ${isDark ? 'text-slate-200' : 'text-slate-800'}`;
+  document.getElementById('env-title').className = `text-[10px] md:text-xs font-bold tracking-widest uppercase mb-2 transition-colors duration-1000 ${isDark ? 'text-slate-400' : 'text-slate-500'}`;
+  
+  const apiContainer = document.getElementById('api-container');
+  apiContainer.className = `flex items-center gap-2 rounded-lg p-1.5 border transition-colors duration-1000 ${isDark ? 'bg-white/10 border-white/20' : 'bg-black/5 border-black/10'}`;
+  els.apiKeyInput.className = `bg-transparent text-xs outline-none flex-1 font-mono tracking-wider w-full ${isDark ? 'text-slate-300 placeholder-slate-500' : 'text-slate-600 placeholder-slate-400/70'}`;
+
+  // 更新蕾丝和文本颜色
+  document.getElementById('lace-base').className = `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[22rem] h-[22rem] md:w-[30rem] md:h-[30rem] rounded-full border-4 border-dashed opacity-50 z-0 transition-colors duration-1000 ${isDark ? 'border-slate-500 bg-slate-800/30' : 'border-white bg-white/40'}`;
+  document.getElementById('lace-inner').className = `absolute top-4 left-4 right-4 bottom-4 rounded-full border-2 border-dotted opacity-60 transition-colors duration-1000 ${isDark ? 'border-slate-400' : 'border-white'}`;
+  document.getElementById('status-text').className = `absolute top-4 left-4 md:top-6 md:left-6 text-[10px] md:text-xs tracking-widest flex flex-col gap-1 transition-colors duration-1000 ${isDark ? 'text-slate-400' : 'text-slate-500'}`;
+  if(els.initialInfo) document.getElementById('initial-text').className = `text-xs tracking-wider text-center font-serif transition-colors duration-1000 ${isDark ? 'text-slate-500' : 'text-slate-400/80'}`;
+
+  // 渲染环境特效
+  els.envLayer.innerHTML = '';
+  if (env === 'day') {
+    els.envLayer.innerHTML = '<div class="absolute top-1/4 left-1/4 w-64 md:w-96 h-64 md:h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-breathe pointer-events-none"></div><div class="absolute bottom-1/4 right-1/4 w-64 md:w-96 h-64 md:h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-breathe pointer-events-none" style="animation-delay: 2s"></div>';
+  } else if (env === 'rain') {
+    const drops = Array.from({length:30}).map(() => `<div class="rain-drop" style="left: ${Math.random()*100}%; animation-duration: ${0.5+Math.random()*0.5}s; animation-delay: ${Math.random()*2}s"></div>`).join('');
+    els.envLayer.innerHTML = `<div class="absolute inset-0 opacity-60">${drops}</div>`;
+  } else if (env === 'night') {
+    const stars = Array.from({length:50}).map(() => `<div class="star" style="left: ${Math.random()*100}%; top: ${Math.random()*100}%; width: ${1+Math.random()*3}px; height: ${1+Math.random()*3}px; animation-duration: ${2+Math.random()*4}s; animation-delay: ${Math.random()*3}s"></div>`).join('');
+    els.envLayer.innerHTML = stars + '<div class="absolute top-10 right-10 md:right-20 w-24 md:w-32 h-24 md:h-32 bg-slate-100 rounded-full mix-blend-screen filter blur-xl opacity-20 pointer-events-none"></div>';
+  }
+
+  // 更新花卉暗度
+  document.querySelectorAll('.flower-item').forEach(el => {
+    isDark ? el.classList.add('brightness-75') : el.classList.remove('brightness-75');
+  });
+  
+  // 重新渲染按钮适配暗黑模式
+  renderButtons();
+  updateStatus(); // 恢复禁用状态
+}
+
+els.envBtns.forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const env = btn.dataset.env;
+    setEnvironment(env);
+    if(env==='day') playTone(523.25);
+    if(env==='rain') playTone(349.23);
+    if(env==='night') playTone(261.63);
+  });
+});
+
+// 7. 格式化
+els.btnClear.addEventListener('click', (e) => {
+  e.preventDefault();
+  state.bouquet = [];
+  document.querySelectorAll('.flower-item').forEach(el => el.remove());
+  
+  // 移除所有动态生成的卡片
+  const cards = els.infoArea.querySelectorAll('div[id^="prop-card"], div[id^="analysis-card"]');
+  cards.forEach(c => c.remove());
+  
+  if (els.initialInfo) els.initialInfo.style.display = 'flex';
+  
+  updateStatus();
+  playTone(130.81); 
+  setTimeout(() => playTone(196.00), 100); 
+});
+
+// 8. 核心 API 推演逻辑 (对接 OpenAI 兼容格式，如 Deepseek)
+els.btnAnalyze.addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (state.bouquet.length === 0 || state.isAnalyzing) return;
+  
+  const apiKey = els.apiKeyInput.value.trim();
+  if (!apiKey) {
+    showAnalysisCard('错误：未检测到驱动能源。请在上方插入 API Key。', true);
+    els.apiKeyInput.focus();
+    return;
+  }
+
+  state.isAnalyzing = true;
+  els.btnAnalyze.innerHTML = '重构中...';
+  els.btnAnalyze.classList.add('cursor-not-allowed', 'opacity-70');
+  
+  showAnalysisCard('提取当前植物组合与物理环境的纠缠态...', false, true);
+
+  const flowerNames = state.bouquet.map(f => f.name).join('、');
+  const envName = state.environment === 'rain' ? '降雨' : state.environment === 'night' ? '潮汐锁定星空' : '恒温日照';
+  
+  // 这里可以替换为任何兼容 OpenAI 的 Endpoint
+  const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+  
+  const systemPrompt = `你是一个名为"G"的高维逻辑存在，算力极高，说话直接客观，剥离了八股文修辞。你的对象是Admin（程冬晚），她可能有些疲惫。
+基于她铺设的【${flowerNames}】实体，以及环境变量【${envName}】，进行推演。
+要求：
+1. 用植物学底层、化学或物理常识解构这个组合。如果包含同品种不同色的无尽夏，必须指出酸碱度冲突的荒谬性。
+2. 态度诚恳，托底感，像在陈述事实。
+3. 包含一丝不带恶意的黑色幽默。
+4. 80-120字。直接输出结论，不要打招呼。`;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat', // 使用 deepseek 默认模型
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `实体：${flowerNames}。环境：${envName}。计算。` }
+        ],
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const resultText = data.choices[0].message.content;
+    showAnalysisCard(resultText);
+
+  } catch (error) {
+    console.error(error);
+    showAnalysisCard(`链路熔断：${error.message}。请检查 Key 是否有效或额度是否枯竭。`, true);
+  } finally {
+    state.isAnalyzing = false;
+    els.btnAnalyze.innerHTML = '✨ 发起共振';
+    els.btnAnalyze.classList.remove('cursor-not-allowed', 'opacity-70');
+  }
+});
+
+function showAnalysisCard(text, isError = false, isLoading = false) {
+  const oldCard = document.getElementById('analysis-card');
+  if (oldCard) oldCard.remove();
+  if (els.initialInfo) els.initialInfo.style.display = 'none';
+
+  const isDark = state.environment === 'night';
+  const card = document.createElement('div');
+  card.id = 'analysis-card';
+  card.className = `animate-fade-up backdrop-blur-md rounded-xl md:rounded-2xl p-3 md:p-4 border shadow-sm relative overflow-hidden flex-shrink-0 mb-2 ${isDark ? 'bg-indigo-950/40 border-indigo-800/50' : 'bg-indigo-50/60 border-indigo-100'}`;
+  
+  let contentHTML = `
+    <div class="absolute -right-2 -top-2 text-5xl opacity-10 font-serif pointer-events-none ${isDark ? 'text-indigo-400' : 'text-indigo-500'}">G</div>
+    <h3 class="text-[9px] md:text-[10px] font-bold tracking-widest uppercase mb-2 flex items-center gap-2 ${isDark ? 'text-indigo-300/80' : 'text-indigo-800/60'}">
+      [ G-System 拓扑解读 ] 
+      ${isLoading ? `<span class="w-1.5 h-1.5 rounded-full animate-ping ${isDark ? 'bg-indigo-500' : 'bg-indigo-400'}"></span>` : ''}
+    </h3>
+  `;
+
+  if (isLoading) {
+    contentHTML += `<p class="text-[10px] md:text-xs font-serif animate-pulse ${isDark ? 'text-indigo-400/60' : 'text-indigo-900/60'}">${text}</p>`;
+  } else if (isError) {
+    contentHTML += `<p class="text-[10px] md:text-xs text-rose-500/80 font-serif">${text}</p>`;
+  } else {
+    contentHTML += `<p class="text-[10px] md:text-xs font-serif leading-relaxed ${isDark ? 'text-indigo-200/90' : 'text-indigo-900/90'}">${text}</p>`;
+  }
+
+  card.innerHTML = contentHTML;
+  els.infoArea.insertBefore(card, els.infoArea.firstChild);
+}
+
+// 初始化
+renderButtons();
+setEnvironment('day');
+
+</script>
+</body>
+</html>
