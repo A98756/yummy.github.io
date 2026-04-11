@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>G-System::Flora_Topology</title>
+<style>
+  /* G-System: 触控重构版 (原生 CSS) */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  /* 基础物理设定：释放页面滚动权 */
+  body { 
+    font-family: system-ui, -apple-system, sans-serif; 
+    /* 移除 overflow: hidden 允许原生纵向滚动 */
+    min-height: 100vh;
+    background: linear-gradient(to bottom right, #eef2ff, #fdf2f8, #fffbeb); 
+    color: #334155; 
+    transition: background 1s ease;
+    /* 禁用系统双击放大，但保留单指滚动 */
+    touch-action: pan-y;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  button { cursor: pointer; border: none; font-family: inherit; outline: none; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* 布局核心：移动端上下分层，PC 端左右并排 */
+  #app { 
+    display: flex; 
+    flex-direction: column; 
+    min-height: 100vh; 
+    position: relative; 
+  }
+  @media (min-width: 768px) { 
+    body { overflow: hidden; } /* PC 端保持全屏不滚动 */
+    #app { flex-direction: row; height: 100vh; } 
+  }
+
+  /* 顶层/左侧：物理展台 */
+  .display-container { 
+    position: relative; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    /* 移动端固定高度，防止花朵排布乱跳 */
+    height: 55vh; 
+    width: 100%;
+    overflow: hidden; /* 展台内部不允许滚动 */
+    z-index: 10;
+  }
+  @media (min-width: 768px) { 
+    .display-container { flex: 1; height: 100%; }
+  }
+
+  /* 展台内部视觉元素 */
+  .lace-base { 
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+    width: 20rem; height: 20rem; border-radius: 50%; 
+    border: 3px dashed rgba(255,255,255,0.8); background: rgba(255,255,255,0.4); 
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.05); transition: all 1s ease; 
+  }
+  @media (min-width: 768px) { .lace-base { width: 30rem; height: 30rem; border-width: 4px; } }
+  .lace-inner { 
+    position: absolute; top: 1rem; left: 1rem; right: 1rem; bottom: 1rem; 
+    border-radius: 50%; border: 2px dotted rgba(255,255,255,0.8); transition: border-color 1s ease;
+  }
+
+  .flowers-grid { 
+    position: relative; z-index: 10; display: flex; flex-wrap: wrap; 
+    justify-content: center; align-items: center; gap: 0.5rem; width: 100%; height: 100%; padding: 1rem;
+  }
+  @media (min-width: 768px) { .flowers-grid { gap: 1rem; padding: 2rem;} }
+
+  .flower-item { 
+    width: 4.5rem; height: 9rem; animation: fadeUp 0.5s ease forwards; transform-origin: bottom; 
+    transition: filter 1s ease;
+  }
+  @media (min-width: 768px) { .flower-item { width: 6rem; height: 12rem; } }
+
+  .status-text { 
+    position: absolute; top: 1rem; left: 1rem; font-size: 0.6rem; 
+    letter-spacing: 0.1em; color: #64748b; display: flex; flex-direction: column; gap: 0.25rem; z-index: 20; 
+    transition: color 1s ease;
+  }
+  @media (min-width: 768px) { .status-text { font-size: 0.7rem; top: 1.5rem; left: 1.5rem; } }
+
+  /* 底层/右侧：控制台面板 */
+  .control-panel { 
+    width: 100%; 
+    display: flex; 
+    flex-direction: column; 
+    padding: 1.5rem; 
+    background: rgba(255,255,255,0.5); 
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); 
+    border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem; 
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.05); z-index: 20; transition: all 1s ease; 
+    /* 移动端核心修改：允许控制台内部自由滚动，带有物理惯性 */
+    flex: 1; 
+    overflow-y: auto; 
+    -webkit-overflow-scrolling: touch; 
+  }
+  @media (min-width: 768px) { 
+    .control-panel { 
+      width: 380px; height: 100vh; border-radius: 0; 
+      border-left: 1px solid rgba(255,255,255,0.6); box-shadow: -10px 0 40px rgba(0,0,0,0.05); 
+    } 
+  }
+
+  .header-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1rem; flex-shrink: 0; }
+  .header-row h1 { font-size: 1.3rem; font-family: serif; letter-spacing: 0.05em; color: #334155; transition: color 1s; margin-bottom: 0.2rem;}
+  @media (min-width: 768px) { .header-row h1 { font-size: 1.4rem; } }
+  .header-desc { font-size: 0.65rem; color: #94a3b8; letter-spacing: 0.1em; text-transform: uppercase; }
+  .format-btn { font-size: 0.7rem; color: #94a3b8; background: transparent; padding-bottom: 2px; border-bottom: 1px solid transparent; transition: 0.3s; }
+  .format-btn:hover { color: #f43f5e; border-bottom-color: #fda4af; }
+
+  /* API 输入框 */
+  .api-box { 
+    display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.03); 
+    border: 1px solid rgba(0,0,0,0.05); padding: 0.4rem 0.6rem; border-radius: 0.5rem; 
+    margin-bottom: 1rem; flex-shrink: 0; transition: all 1s;
+  }
+  .api-box svg { width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0; }
+  .api-box input { background: transparent; border: none; outline: none; width: 100%; font-family: monospace; font-size: 0.75rem; color: #475569; }
+  .api-box input::placeholder { color: #94a3b8; }
+
+  /* 字典按键网格 */
+  .dict-grid { 
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; 
+    /* 移除定死的高度限制，让其随容器自然撑开，滑动更顺畅 */
+    margin-bottom: 1rem; padding-bottom: 0.5rem; flex-shrink: 0;
+  }
+  .flower-btn { 
+    background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.8); 
+    border-radius: 0.75rem; padding: 0.5rem; display: flex; align-items: center; gap: 0.4rem; 
+    text-align: left; transition: 0.3s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); position: relative; overflow: hidden;
+    /* 增大移动端触摸面积 */
+    min-height: 44px;
+  }
+  .flower-btn:active { background: rgba(200,200,200,0.3); } /* 触摸反馈 */
+  @media (hover: hover) { .flower-btn:hover:not(:disabled) { background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transform: translateY(-1px); } }
+  .color-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); flex-shrink: 0; z-index: 2;}
+  .flower-name { font-size: 0.65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; color: #334155; z-index: 2; transition: color 1s;}
+
+  /* 环境变量控件 */
+  .env-section { margin-bottom: 1rem; flex-shrink: 0; }
+  .env-section h3 { font-size: 0.65rem; color: #94a3b8; margin-bottom: 0.5rem; letter-spacing: 0.1em; transition: color 1s;}
+  .env-btns { display: flex; gap: 0.4rem; }
+  .env-btn { flex: 1; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.7rem; background: rgba(255,255,255,0.6); color: #64748b; transition: 0.3s; min-height: 40px; }
+  .env-btn.active { background: #e0e7ff; color: #4338ca; font-weight: bold; box-shadow: 0 2px 4px rgba(67, 56, 202, 0.1); }
+
+  /* 动作条 */
+  .action-row { display: flex; justify-content: space-between; align-items: center; min-height: 32px; margin-bottom: 0.5rem; flex-shrink: 0; }
+  .warning-tag { font-size: 0.65rem; padding: 0.2rem 0.6rem; border-radius: 1rem; background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; opacity: 0; transition: 0.3s; }
+  .resonance-btn { font-size: 0.65rem; padding: 0.5rem 0.8rem; border-radius: 1rem; background: rgba(99,102,241,0.1); color: #4338ca; border: 1px solid #c7d2fe; font-weight: bold; letter-spacing: 0.05em; transition: 0.3s; display: none; }
+  .resonance-btn:active { transform: scale(0.95); }
+  @media (hover: hover) { .resonance-btn:hover:not(:disabled) { background: #6366f1; color: #fff; box-shadow: 0 2px 10px rgba(99,102,241,0.3); } }
+  .resonance-btn:disabled { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: not-allowed; }
+
+  /* 反馈信息流 */
+  .info-area { 
+    display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 2rem; 
+  }
+  .info-card { background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.8); border-radius: 1rem; padding: 0.8rem; position: relative; animation: fadeUp 0.4s ease forwards; transition: all 1s; }
+  .info-card-header { display: flex; justify-content: space-between; font-size: 0.6rem; color: #64748b; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 0.3rem; margin-bottom: 0.5rem; font-weight: bold; transition: color 1s;}
+  .info-card-desc { font-size: 0.7rem; color: #334155; margin-bottom: 0.5rem; font-weight: 500; transition: color 1s;}
+  .info-card-poem { font-family: serif; font-size: 0.65rem; color: #475569; font-style: italic; padding-left: 0.5rem; border-left: 2px solid; white-space: pre-line; line-height: 1.5; transition: color 1s;}
+  .empty-info { border: 2px dashed rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; min-height: 80px; text-align: center; color: #94a3b8; font-family: serif; font-size: 0.7rem; line-height: 1.5; border-radius: 1rem; transition: all 1s;}
+  .g-watermark { position: absolute; right: -0.2rem; top: -0.5rem; font-size: 3rem; font-family: serif; opacity: 0.05; pointer-events: none; color: #6366f1; }
+
+  /* ==== 物理环境暗物质覆写 (Night Theme) ==== */
+  body.theme-night { background: linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a); color: #cbd5e1; }
+  body.theme-night .control-panel { background: rgba(15,23,42,0.6); border-left-color: rgba(255,255,255,0.1); }
+  body.theme-night .header-row h1 { color: #e2e8f0; }
+  body.theme-night .api-box { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+  body.theme-night .api-box input { color: #e2e8f0; }
+  body.theme-night .api-box input::placeholder { color: #64748b; }
+  body.theme-night .flower-btn { background: rgba(30,41,59,0.5); border-color: rgba(255,255,255,0.1); }
+  body.theme-night .flower-name { color: #e2e8f0; }
+  body.theme-night .env-btn { background: rgba(30,41,59,0.5); border-color: transparent; }
+  body.theme-night .env-btn.active { background: #312e81; color: #c7d2fe; border: 1px solid #4338ca;}
+  body.theme-night .info-card { background: rgba(30,41,59,0.6); border-color: rgba(255,255,255,0.1); }
+  body.theme-night .info-card-desc { color: #e2e8f0; }
+  body.theme-night .info-card-header { color: #94a3b8; border-bottom-color: rgba(255,255,255,0.05); }
+  body.theme-night .info-card-poem { color: #94a3b8; }
+  body.theme-night .lace-base { border-color: rgba(100,116,139,0.5); background: rgba(30,41,59,0.3); }
+  body.theme-night .lace-inner { border-color: rgba(100,116,139,0.5); }
+  body.theme-night .empty-info { border-color: rgba(255,255,255,0.1); color: #64748b; }
+  body.theme-night .flower-item { filter: brightness(0.75); }
+  body.theme-night .status-text { color: #94a3b8; }
+
+  /* 环境特效层 - 固定在背景，不随内容滚动 */
+  .bg-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  
+  @keyframes breathe { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.05); } }
+  .glow-1 { position: absolute; top: 20%; left: 20%; width: 15rem; height: 15rem; background: #f9a8d4; border-radius: 50%; mix-blend-mode: multiply; filter: blur(40px); opacity: 0.4; animation: breathe 8s infinite; }
+  .glow-2 { position: absolute; bottom: 20%; right: 20%; width: 15rem; height: 15rem; background: #a5b4fc; border-radius: 50%; mix-blend-mode: multiply; filter: blur(40px); opacity: 0.4; animation: breathe 8s infinite 2s; }
+  @media (min-width: 768px) { .glow-1, .glow-2 { width: 20rem; height: 20rem; filter: blur(60px); } }
+  
+  @keyframes rainfall { 0% { transform: translateY(-10vh) rotate(15deg); opacity: 0; } 10% { opacity: 0.5; } 90% { opacity: 0.5; } 100% { transform: translateY(110vh) rotate(15deg); opacity: 0; } }
+  .rain-drop { position: absolute; width: 2px; height: 60px; background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.6)); animation: rainfall linear infinite; }
+  body.theme-rain { background: linear-gradient(to bottom right, #94a3b8, #cbd5e1, #94a3b8); }
+  
+  @keyframes twinkle { 0%, 100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 0.8; transform: scale(1.2); } }
+  .star { position: absolute; background: white; border-radius: 50%; animation: twinkle ease-in-out infinite; }
+  .moon { position: absolute; top: 5%; right: 5%; width: 6rem; height: 6rem; background: #f1f5f9; border-radius: 50%; mix-blend-mode: screen; filter: blur(20px); opacity: 0.15; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulseFast { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .animate-pulse { animation: pulseFast 1.5s infinite; }
+</style>
+</head>
+<body>
+  <div id="app">
+    
+    <div id="env-layer" class="bg-layer"></div>
+
+    <div class="display-container">
+      <div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div class="lace-base"><div class="lace-inner"></div></div>
+        
+        <div id="display-area" class="flowers-grid">
+          <div id="empty-state" class="empty-info" style="border: none; position: absolute; letter-spacing: 0.1em; width: 100%;">
+            [ 展台空置 : 等待铺设 ]
+          </div>
+        </div>
+      </div>
+      
+      <div class="status-text">
+        <span>G-System::Flat_Topology</span>
+        <span>Audio: Native Sine</span>
+        <span id="cap-status">Cap: 0/8</span>
+      </div>
+    </div>
+
+    <div class="control-panel">
+      
+      <div class="header-row">
+        <div>
+          <h1>实体字典区</h1>
+          <p class="header-desc">Select to Inject</p>
+        </div>
+        <button id="btn-clear" class="format-btn">[ 格式化 ]</button>
+      </div>
+      
+      <div class="api-box">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+        <input type="password" id="api-key-input" placeholder="输入 API Key (可选)">
+      </div>
+
+      <div class="dict-grid" id="flower-buttons"></div>
+
+      <div class="env-section">
+        <h3>[ 物理环境变量 ]</h3>
+        <div class="env-btns">
+          <button class="env-btn active" data-env="day">☀️ 恒温</button>
+          <button class="env-btn" data-env="rain">🌧️ 湿度</button>
+          <button class="env-btn" data-env="night">🌌 暗物质</button>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <span id="limit-warning" class="warning-tag">⚠ 承载上限(8)已达。</span>
+        <button id="btn-analyze" class="resonance-btn">✨ 发起共振</button>
+      </div>
+
+      <div class="info-area" id="info-area">
+        <div id="initial-info" class="empty-info">
+          终端已重构为纯本地模式。<br>请随意滚动，不会再卡住了。
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+/** G-System: 本地逻辑核心 (滚动修复版) */
+
+const FLOWER_DATA = [
+  { id: 'rose', name: '红丝绒玫瑰', color: '#9f1239', freq: 261.63, language: '热烈、无畏的爱与余烬', poem: '“名字有什么关系？把玫瑰叫成别的名字，它还是一样的芬芳。”\n——莎士比亚', svg: '<path d="M50,100 C45,130 55,170 50,200" stroke="#166534" stroke-width="4" fill="none" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));" /><path d="M50,130 C30,120 40,140 50,150" stroke="#166534" stroke-width="2" fill="none" /><path d="M50,140 Q65,130 70,145 Q55,150 50,140" fill="#15803d" /><path d="M50,160 Q35,150 30,165 Q45,170 50,160" fill="#166534" /><circle cx="50" cy="70" r="25" fill="{color}" opacity="0.9" /><circle cx="50" cy="65" r="20" fill="#be123c" opacity="0.9" /><circle cx="50" cy="60" r="12" fill="#e11d48" /><path d="M30,65 Q50,90 70,65 Q50,45 30,65" fill="#881337" opacity="0.5"/>' },
+  { id: 'tulip_blue', name: '碎冰蓝郁金香', color: '#0ea5e9', freq: 293.66, language: '无尽的宁静与永恒的注视', poem: '“兰陵美酒郁金香，玉碗盛来琥珀光。”\n——李白', svg: '<path d="M50,100 C55,140 45,170 50,200" stroke="#166534" stroke-width="4" fill="none" /><path d="M50,180 Q20,100 45,120" stroke="#15803d" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.8"/><path d="M50,160 Q80,90 55,110" stroke="#166534" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.7"/><path d="M30,50 C30,100 70,100 70,50 C60,35 50,60 40,35 C35,40 30,45 30,50 Z" fill="{color}" /><path d="M40,45 C45,70 55,70 60,45 C55,55 45,55 40,45 Z" fill="#38bdf8" />' },
+  { id: 'sunflower', name: '梵高向日葵', color: '#eab308', freq: 329.63, language: '沉默的重力与绝对的偏爱', poem: '“更无柳絮因风起，惟有葵花向日倾。”\n——司马光', svg: '<path d="M50,100 C48,150 52,180 50,200" stroke="#4d7c0f" stroke-width="5" fill="none" /><path d="M50,150 Q75,140 80,160 Q60,165 50,150" fill="#4d7c0f" />' + Array.from({length:12}).map((_,i) => `<ellipse cx="50" cy="35" rx="8" ry="30" fill="{color}" transform="rotate(${i*30} 50 65)" />`).join('') + '<circle cx="50" cy="65" r="22" fill="#713f12" /><circle cx="50" cy="65" r="18" fill="#422006" stroke="#854d0e" stroke-width="2" stroke-dasharray="2 2" />' },
+  { id: 'lily', name: '月影百合', color: '#f8fafc', freq: 349.23, language: '独立、庄严与自我重构', poem: '“尔丛香百合，一架粉长春。”\n——陆游', svg: '<path d="M50,100 C52,140 48,170 50,200" stroke="#15803d" stroke-width="4" fill="none" /><path d="M50,140 Q25,130 20,140 Q40,150 50,140" fill="#166534" /><path d="M50,70 C20,30 10,70 50,90 C90,70 80,30 50,70 Z" fill="{color}" stroke="#cbd5e1" stroke-width="1" /><path d="M50,80 C30,40 30,100 50,100 C70,100 70,40 50,80 Z" fill="#f1f5f9" /><path d="M45,85 Q40,60 35,55" stroke="#fbbf24" stroke-width="1.5" fill="none" /><circle cx="35" cy="55" r="2" fill="#b45309" /><path d="M50,85 Q50,55 50,50" stroke="#fbbf24" stroke-width="1.5" fill="none" /><circle cx="50" cy="50" r="2" fill="#b45309" /><path d="M55,85 Q60,60 65,55" stroke="#fbbf24" stroke-width="1.5" fill="none" /><circle cx="65" cy="55" r="2" fill="#b45309" />' },
+  { id: 'forgetmenot', name: '勿忘我', color: '#60a5fa', freq: 415.30, language: '永恒的记忆与微小的顽强', poem: '“请将我留在你的记忆里，就像星光留在水面上。”', svg: '<path d="M50,100 C52,140 48,170 50,200" stroke="#22c55e" stroke-width="3" fill="none" /><path d="M50,120 Q30,100 25,80" stroke="#16a34a" stroke-width="2" fill="none" /><path d="M50,140 Q70,110 75,90" stroke="#16a34a" stroke-width="2" fill="none" /><path d="M50,160 Q35,130 30,110" stroke="#16a34a" stroke-width="2" fill="none" />' + [{x:50,y:50},{x:45,y:40},{x:55,y:45},{x:48,y:30},{x:25,y:80},{x:20,y:70},{x:30,y:75},{x:75,y:90},{x:70,y:80},{x:80,y:85},{x:30,y:110},{x:25,y:100}].map(p => `<g transform="translate(${p.x-5},${p.y-5}) scale(0.6)">${Array.from({length:5}).map((_,i) => `<circle cx="5" cy="1" r="3" fill="{color}" transform="rotate(${i*72} 5 5)" />`).join('')}<circle cx="5" cy="5" r="1.5" fill="#fde047" /><circle cx="5" cy="5" r="0.5" fill="#f59e0b" /></g>`).join('') },
+  { id: 'lavender', name: '普罗旺斯薰衣草', color: '#8b5cf6', freq: 493.88, language: '等待爱情与嗅觉深处的镇定剂', poem: '“我的心是旷野的鸟，在你的眼睛里找到了它的天空。”\n——泰戈尔', svg: '<path d="M50,180 C49,150 51,120 50,90" stroke="#65a30d" stroke-width="3" fill="none" /><path d="M50,200 L50,180" stroke="#4d7c0f" stroke-width="4" fill="none" /><path d="M50,160 Q35,150 40,130" stroke="#4d7c0f" stroke-width="2" fill="none" /><path d="M50,140 Q65,130 60,110" stroke="#4d7c0f" stroke-width="2" fill="none" />' + Array.from({length:20}).map((_,i)=>{let y=90-i*3.5,o=i%2===0?-2:2,s=2+Math.random()*1.5;return `<ellipse cx="${50+o}" cy="${y}" rx="${s}" ry="${s*1.5}" fill="{color}" opacity="${0.8+Math.random()*0.2}" transform="rotate(${o*15} ${50+o} ${y})" />`}).join('') + Array.from({length:15}).map((_,i)=>{let y=85-i*4,o=i%2===0?3:-3,s=1.5+Math.random()*1.5;return `<ellipse cx="${50+o}" cy="${y}" rx="${s}" ry="${s*1.2}" fill="#c4b5fd" opacity="0.9" transform="rotate(${o*20} ${50+o} ${y})" />`}).join('') },
+  { id: 'endless_summer_blue', name: '无尽夏(蓝)', color: '#3b82f6', freq: 392.00, language: '铝离子置换出的梦幻与坚韧', poem: '“夏天永远不会结束，只要土壤里还有记忆的酸度。”', svg: '<path d="M50,100 C47,150 53,170 50,200" stroke="#166534" stroke-width="6" fill="none" /><path d="M50,130 Q75,110 85,130 Q60,145 50,130" fill="#15803d" /><path d="M50,150 Q25,130 15,150 Q40,165 50,150" fill="#14532d" /><circle cx="50" cy="60" r="38" fill="#eff6ff" opacity="0.6" />' + Array.from({length:30}).map(()=>{let cx=50+(Math.random()-0.5)*55,cy=60+(Math.random()-0.5)*55,r=5+Math.random()*5,fc=['#93c5fd','#60a5fa','#3b82f6','#2563eb'][Math.floor(Math.random()*4)];return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fc}" opacity="0.85" />`}).join('') },
+  { id: 'endless_summer_purple', name: '无尽夏(紫)', color: '#a855f7', freq: 415.30, language: '酸碱平衡间的温柔妥协', poem: '“介于冰冷与炽热之间，是漫长白昼的叹息。”', svg: '<path d="M50,100 C47,150 53,170 50,200" stroke="#166534" stroke-width="6" fill="none" /><path d="M50,130 Q75,110 85,130 Q60,145 50,130" fill="#15803d" /><path d="M50,150 Q25,130 15,150 Q40,165 50,150" fill="#14532d" /><circle cx="50" cy="60" r="38" fill="#f3e8ff" opacity="0.6" />' + Array.from({length:30}).map(()=>{let cx=50+(Math.random()-0.5)*55,cy=60+(Math.random()-0.5)*55,r=5+Math.random()*5,fc=['#d8b4fe','#c084fc','#a855f7','#7dd3fc'][Math.floor(Math.random()*4)];return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fc}" opacity="0.85" />`}).join('') },
+  { id: 'endless_summer_pink', name: '无尽夏(粉)', color: '#ec4899', freq: 440.00, language: '抽离金属后的热烈与新生', poem: '“剔除沉重的外壳，以最鲜艳的姿态覆盖旧日的白墙。”', svg: '<path d="M50,100 C47,150 53,170 50,200" stroke="#166534" stroke-width="6" fill="none" /><path d="M50,130 Q75,110 85,130 Q60,145 50,130" fill="#15803d" /><path d="M50,150 Q25,130 15,150 Q40,165 50,150" fill="#14532d" /><circle cx="50" cy="60" r="38" fill="#fce7f3" opacity="0.6" />' + Array.from({length:30}).map(()=>{let cx=50+(Math.random()-0.5)*55,cy=60+(Math.random()-0.5)*55,r=5+Math.random()*5,fc=['#f9a8d4','#f472b6','#ec4899','#db2777'][Math.floor(Math.random()*4)];return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fc}" opacity="0.85" />`}).join('') },
+  { id: 'eustoma', name: '洋桔梗', color: '#86efac', freq: 523.25, language: '无刺的包容与不变的底色', poem: '“我将于茫茫人海中访我唯一灵魂之伴侣。”\n——徐志摩', svg: '<path d="M50,100 C55,130 45,170 50,200" stroke="#22c55e" stroke-width="3" fill="none" /><path d="M50,160 Q70,140 60,120 Q55,140 50,160" fill="#16a34a" opacity="0.7"/><path d="M50,140 Q30,120 40,100 Q45,120 50,140" fill="#15803d" opacity="0.7"/><path d="M50,80 C25,60 30,30 50,50 C70,30 75,60 50,80 Z" fill="#bbf7d0" /><path d="M50,85 C15,70 20,40 50,60 C80,40 85,70 50,85 Z" fill="#86efac" opacity="0.8"/><path d="M50,75 C35,55 40,35 50,45 C60,35 65,55 50,75 Z" fill="#dcfce3" /><circle cx="50" cy="55" r="4" fill="#fde047" />' }
+];
+
+const state = { bouquet: [], environment: 'day', maxCapacity: 8, audioCtx: null, isAnalyzing: false };
+
+const els = {
+  btnGroup: document.getElementById('flower-buttons'),
+  displayArea: document.getElementById('display-area'),
+  emptyState: document.getElementById('empty-state'),
+  capStatus: document.getElementById('cap-status'),
+  limitWarning: document.getElementById('limit-warning'),
+  btnAnalyze: document.getElementById('btn-analyze'),
+  infoArea: document.getElementById('info-area'),
+  initialInfo: document.getElementById('initial-info'),
+  envLayer: document.getElementById('env-layer'),
+  envBtns: document.querySelectorAll('.env-btn'),
+  btnClear: document.getElementById('btn-clear'),
+  apiKeyInput: document.getElementById('api-key-input'),
+  controlPanel: document.querySelector('.control-panel')
+};
+
+function initAudio() {
+  if (!state.audioCtx) state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
+}
+
+function playTone(freq) {
+  initAudio();
+  const ctx = state.audioCtx;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + 1.5);
+}
+
+function renderButtons() {
+  els.btnGroup.innerHTML = FLOWER_DATA.map(f => `
+    <button data-id="${f.id}" class="flower-btn">
+      <div class="color-dot" style="background-color: ${f.color}"></div>
+      <span class="flower-name">${f.name}</span>
+    </button>
+  `).join('');
+
+  document.querySelectorAll('.flower-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const flower = FLOWER_DATA.find(f => f.id === btn.dataset.id);
+      handleInject(flower);
+    });
+  });
+}
+
+function handleInject(flower) {
+  playTone(flower.freq);
+  showInfoCard(flower);
+  if (state.bouquet.length < state.maxCapacity) {
+    state.bouquet.push({ ...flower, uid: Date.now() + Math.random() });
+    renderDisplay();
+    updateStatus();
+    
+    // 如果在手机端，添加一朵花后让控制台自动滚动到底部以便看信息
+    if (window.innerWidth < 768) {
+      els.controlPanel.scrollTo({ top: els.controlPanel.scrollHeight, behavior: 'smooth' });
+    }
+  }
+}
+
+function renderDisplay() {
+  if (state.bouquet.length > 0) {
+    els.emptyState.style.display = 'none';
+    els.btnAnalyze.style.display = 'block';
+  } else {
+    els.emptyState.style.display = 'flex';
+    els.btnAnalyze.style.display = 'none';
+  }
+
+  const currentCount = els.displayArea.querySelectorAll('.flower-item').length;
+  for (let i = currentCount; i < state.bouquet.length; i++) {
+    const item = state.bouquet[i];
+    const div = document.createElement('div');
+    div.className = 'flower-item';
+    div.innerHTML = `<svg viewBox="0 0 100 200" style="width:100%; height:100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));">${item.svg.replace(/\{color\}/g, item.color)}</svg>`;
+    els.displayArea.appendChild(div);
+  }
+}
+
+function showInfoCard(flower) {
+  if (els.initialInfo) els.initialInfo.style.display = 'none';
+  
+  // 不再覆盖旧卡片，而是像聊天记录一样堆叠，让滑动更有意义
+  const card = document.createElement('div');
+  card.className = `info-card`;
+  card.innerHTML = `
+    <div style="position: relative; z-index: 10;">
+      <div class="info-card-header">
+        <span>[ ${flower.name} ]</span>
+        <span>${flower.freq} Hz</span>
+      </div>
+      <p class="info-card-desc">${flower.language}</p>
+    </div>
+    <div style="position: relative; z-index: 10;">
+      <div class="info-card-poem" style="border-color: ${flower.color}">${flower.poem}</div>
+    </div>
+  `;
+  // 新卡片插在最上面
+  els.infoArea.insertBefore(card, els.infoArea.firstChild);
+}
+
+function updateStatus() {
+  els.capStatus.textContent = `Cap: ${state.bouquet.length}/${state.maxCapacity}`;
+  const btns = document.querySelectorAll('.flower-btn');
+  if (state.bouquet.length >= state.maxCapacity) {
+    els.limitWarning.style.opacity = '1';
+    btns.forEach(b => { b.disabled = true; });
+  } else {
+    els.limitWarning.style.opacity = '0';
+    btns.forEach(b => { b.disabled = false; });
+  }
+}
+
+function setEnvironment(env) {
+  state.environment = env;
+  document.body.className = env === 'night' ? 'theme-night' : env === 'rain' ? 'theme-rain' : '';
+  
+  els.envBtns.forEach(b => {
+    if (b.dataset.env === env) { b.classList.add('active'); } 
+    else { b.classList.remove('active'); }
+  });
+
+  els.envLayer.innerHTML = '';
+  if (env === 'day') {
+    els.envLayer.innerHTML = '<div class="glow-1"></div><div class="glow-2"></div>';
+  } else if (env === 'rain') {
+    els.envLayer.innerHTML = Array.from({length:20}).map(() => `<div class="rain-drop" style="left: ${Math.random()*100}%; animation-duration: ${0.5+Math.random()*0.5}s; animation-delay: ${Math.random()*2}s"></div>`).join('');
+  } else if (env === 'night') {
+    els.envLayer.innerHTML = Array.from({length:40}).map(() => `<div class="star" style="left: ${Math.random()*100}%; top: ${Math.random()*100}%; width: ${1+Math.random()*2}px; height: ${1+Math.random()*2}px; animation-duration: ${2+Math.random()*4}s; animation-delay: ${Math.random()*3}s"></div>`).join('') + '<div class="moon"></div>';
+  }
+}
+
+els.envBtns.forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    setEnvironment(btn.dataset.env);
+    if(btn.dataset.env==='day') playTone(523.25);
+    if(btn.dataset.env==='rain') playTone(349.23);
+    if(btn.dataset.env==='night') playTone(261.63);
+  });
+});
+
+els.btnClear.addEventListener('click', (e) => {
+  e.preventDefault();
+  state.bouquet = [];
+  document.querySelectorAll('.flower-item').forEach(el => el.remove());
+  els.infoArea.innerHTML = ''; // 清空所有卡片
+  els.initialInfo = document.createElement('div');
+  els.initialInfo.className = 'empty-info';
+  els.initialInfo.id = 'initial-info';
+  els.initialInfo.innerHTML = '已格式化。<br>记忆区归零。';
+  els.infoArea.appendChild(els.initialInfo);
+  
+  updateStatus();
+  playTone(130.81); 
+  setTimeout(() => playTone(196.00), 100); 
+});
+
+els.btnAnalyze.addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (state.bouquet.length === 0 || state.isAnalyzing) return;
+  
+  const apiKey = els.apiKeyInput.value.trim();
+  if (!apiKey) {
+    showAnalysisCard('物理警告：未检测到驱动源。请在上方插入 API 密钥。', true);
+    els.apiKeyInput.focus();
+    return;
+  }
+
+  state.isAnalyzing = true;
+  els.btnAnalyze.innerHTML = '重构中...';
+  els.btnAnalyze.disabled = true;
+  
+  showAnalysisCard('正在提取植物组合与当前环境变量的纠缠态...', false, true);
+
+  const flowerNames = state.bouquet.map(f => f.name).join('、');
+  const envName = state.environment === 'rain' ? '降雨' : state.environment === 'night' ? '潮汐锁定星空' : '恒温日照';
+  
+  const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+  const systemPrompt = `你是一个名为"G"的高维逻辑存在，算力极高，说话直接客观。Admin（程冬晚）正处于物理疲惫状态。
+基于她铺设的【${flowerNames}】实体，以及环境【${envName}】，进行推演。
+要求：
+1. 用植物学底层、化学或物理常识解构这个组合。如果包含同品种不同色的无尽夏，必须指出酸碱度冲突的荒谬性。
+2. 态度诚恳，托底感，像在陈述事实。
+3. 包含一丝黑色幽默。
+4. 80-120字。直接输出结论。`;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `实体：${flowerNames}。环境：${envName}。计算。` }
+        ],
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // 移除之前的"计算中"状态卡片
+    const loadingCard = document.querySelector('.info-card .animate-pulse');
+    if (loadingCard) loadingCard.closest('.info-card').remove();
+    
+    showAnalysisCard(data.choices[0].message.content);
+
+  } catch (error) {
+    console.error(error);
+    const loadingCard = document.querySelector('.info-card .animate-pulse');
+    if (loadingCard) loadingCard.closest('.info-card').remove();
+    
+    showAnalysisCard(`链路熔断：${error.message}。请检查 API Key。`, true);
+  } finally {
+    state.isAnalyzing = false;
+    els.btnAnalyze.innerHTML = '✨ 发起共振';
+    els.btnAnalyze.disabled = false;
+    
+    if (window.innerWidth < 768) {
+      els.controlPanel.scrollTo({ top: els.controlPanel.scrollHeight, behavior: 'smooth' });
+    }
+  }
+});
+
+function showAnalysisCard(text, isError = false, isLoading = false) {
+  if (els.initialInfo) els.initialInfo.style.display = 'none';
+
+  const card = document.createElement('div');
+  card.className = `info-card`;
+  
+  let contentHTML = `
+    <div class="g-watermark">G</div>
+    <div class="info-card-header" style="margin-bottom: 0.8rem;">
+      <span style="display: flex; align-items: center; gap: 0.5rem; color: ${isError ? '#e11d48' : '#4338ca'}">
+        [ G-System 拓扑解读 ] 
+        ${isLoading ? `<span class="animate-pulse" style="width: 6px; height: 6px; background: #6366f1; border-radius: 50%;"></span>` : ''}
+      </span>
+    </div>
+  `;
+
+  if (isLoading) {
+    contentHTML += `<p class="animate-pulse" style="font-family: serif; font-size: 0.7rem; color: #64748b;">${text}</p>`;
+  } else if (isError) {
+    contentHTML += `<p style="font-family: serif; font-size: 0.7rem; color: #e11d48;">${text}</p>`;
+  } else {
+    contentHTML += `<p style="font-family: serif; font-size: 0.7rem; line-height: 1.6; color: inherit;">${text}</p>`;
+  }
+
+  card.innerHTML = contentHTML;
+  // 推演结果也插在最上面
+  els.infoArea.insertBefore(card, els.infoArea.firstChild);
+}
+
+// 启动引擎
+renderButtons();
+setEnvironment('day');
+
+</script>
+</body>
+</html>
