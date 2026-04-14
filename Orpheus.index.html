@@ -3,317 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Geometric Moths & Sonnets (Refined)</title>
+    <title>Geometric Moths & Sonnets (Aesthetic Restoration)</title>
+    <!-- 重新接通美学神经：加载高级字体库与排版引擎 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Serif+SC:wght@300;400&family=Tangerine:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        /* ======================================================================
-           G-CORE: ZERO-DEPENDENCY NATIVE CSS ENGINE
-           ======================================================================
-        */
-        :root {
-            --bg-color: #0a0a0c;
-            --text-main: #e4e4e7;
-            --text-muted: #a1a1aa;
-            --text-dark: #71717a;
-            --panel-bg: rgba(10, 10, 12, 0.4);
-            /* 统一且高兼容性的古典衬线体 */
-            --font-serif: Georgia, "Times New Roman", "Palatino Linotype", "Book Antiqua", serif;
-            --font-zh: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", serif;
-            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
-            overflow: hidden;
-            background-color: var(--bg-color);
-            color: var(--text-muted);
-            font-family: var(--font-serif);
-            touch-action: none;
-            transition: background-color 2s ease;
+            margin: 0; overflow: hidden; background-color: #0a0a0c; color: #d4d4d4;
+            font-family: 'Cormorant Garamond', serif; touch-action: none; transition: background-color 2s ease;
             -webkit-font-smoothing: antialiased;
         }
 
-        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
-
-        #ui-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 10; pointer-events: none; display: flex; justify-content: space-between;
+        /* 修复渲染切边：抛弃父级 filter，将发光动画直接赋予每个拥有宽裕边距的字母 */
+        @keyframes charBreathe {
+            0%, 100% { text-shadow: 0 0 10px currentColor; opacity: 0.85; }
+            50% { text-shadow: 0 0 20px currentColor, 0 0 35px currentColor; opacity: 1; }
         }
 
-        /* 移动端点击外部关闭面板的遮罩层 */
-        #mobile-click-shield {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 15; pointer-events: auto; background: transparent;
-        }
-
-        .panel-interactive { pointer-events: auto; }
-
-        #control-panel {
-            position: absolute; left: 0; top: 0; height: 100%;
-            width: 80vw; max-width: 20rem;
-            background-color: var(--panel-bg);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border-right: 1px solid rgba(255,255,255,0.05);
-            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
-            padding: 2rem 1rem 3rem 1.5rem;
-            display: flex; flex-direction: column; gap: 0.5rem;
-            transform: translateX(-100%);
-            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), background-color 2s ease;
-            z-index: 20; overflow-y: auto; overflow-x: hidden;
-            scrollbar-width: thin; scrollbar-color: #3f3f46 transparent;
-        }
-        #control-panel::-webkit-scrollbar { width: 3px; }
-        #control-panel::-webkit-scrollbar-track { background: transparent; }
-        #control-panel::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-
-        @media (min-width: 768px) {
-            #control-panel { max-width: 22rem; padding-left: 2rem; transform: translateX(0); }
-        }
-
-        .panel-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(63,63,70,0.5); padding-bottom: 0.5rem; margin-bottom: 0.5rem; }
-        .panel-title { font-size: 1.25rem; color: #d4d4d8; font-style: italic; transition: color 1s; }
-        @media (min-width: 768px) { .panel-title { font-size: 1.5rem; } }
-        .close-btn { background: none; border: none; color: #71717a; font-size: 1.25rem; cursor: pointer; padding: 0 0.5rem; }
-        .close-btn:hover { color: #fff; }
-        @media (min-width: 768px) { .close-btn { display: none; } }
-
-        .status-text { font-family: sans-serif; font-size: 0.6875rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 0.5rem; }
-        .status-highlight { color: #e4e4e7; }
-        .counter-box { display: block; margin-top: 0.75rem; border-top: 1px solid rgba(63,63,70,0.3); padding-top: 0.5rem; font-family: var(--font-mono); font-size: 0.75rem; color: #d4d4d8; letter-spacing: 0.05em; }
-
-        .control-btn {
-            font-family: var(--font-serif); letter-spacing: 0.05em; text-align: left;
-            padding: 0.5rem 0.75rem; background: transparent; border: none;
-            border-left: 2px solid transparent; color: var(--text-muted); cursor: pointer;
-            transition: all 0.3s ease; display: block; width: 100%; border-radius: 0 4px 4px 0;
-            line-height: 1.4; font-size: 1rem; position: relative;
-        }
-        .control-btn:hover { background-color: rgba(255,255,255,0.05); transform: translateX(5px); color: #e4e4e7; }
-        .btn-desc { display: block; font-size: 0.65rem; font-style: italic; margin-top: 0.1rem; opacity: 0.8; font-family: var(--font-zh); }
-        @media (min-width: 768px) { .btn-desc { font-size: 0.75rem; } }
-        .divider { height: 1px; background: rgba(63,63,70,0.8); margin: 0.75rem 0; transition: background 1s; flex-shrink: 0; }
-
-        /* -----------------------------------------------------------
-           统一低饱和度“灰烬”色域 (Dusty Palette)
-           ----------------------------------------------------------- */
-        .btn-luna:hover { border-left-color: #a3cba6; } .desc-luna { color: #a3cba6; } /* 莹绿 */
-        .btn-atlas:hover { border-left-color: #b48a66; } .desc-atlas { color: #b48a66; } /* 赤褐 */
-        .btn-rosy:hover { border-left-color: #d1a3a4; } .desc-rosy { color: #d1a3a4; } /* 枯粉 */
-        .btn-deathshead:hover { border-left-color: #c9b07a; } .desc-deathshead { color: #c9b07a; } /* 暗琥珀 */
-        .btn-comet:hover { border-left-color: #c8c6a7; } .desc-comet { color: #c8c6a7; } /* 月光黄 */
-        .btn-cinnabar:hover { border-left-color: #a45a52; } .desc-cinnabar { color: #a45a52; } /* 铁锈红 */
-        .btn-cyan:hover { border-left-color: #7a9fa9; } .desc-cyan { color: #7a9fa9; } /* 灰蓝 */
-        .btn-orchid:hover { border-left-color: #a98b9f; } .desc-orchid { color: #a98b9f; } /* 暮紫 */
-        
-        .btn-erase { color: #71717a; margin-top: 1rem; } .btn-erase:hover { border-left-color: #d4d4d8; color: #d4d4d8; }
-
-        .api-section { margin-top: 1rem; border-top: 1px solid rgba(63,63,70,0.5); padding-top: 1.25rem; transition: border-color 1s; flex-shrink: 0; }
-        .api-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-        .api-title { font-family: var(--font-mono); font-size: 0.625rem; color: #71717a; letter-spacing: 0.1em; text-transform: uppercase; }
-        
-        /* 增加设置按钮的物理点击范围 */
-        .settings-btn { 
-            background: none; border: none; color: #71717a; cursor: pointer; 
-            transition: color 0.3s; padding: 12px; margin: -12px; 
-            position: relative; z-index: 50; 
-        }
-        .settings-btn:hover { color: #d4d4d8; }
-        
-        .input-field {
-            width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(63,63,70,0.8);
-            color: #e4e4e7; font-size: 0.875rem; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem;
-            border-radius: 2px; outline: none; transition: border-color 0.3s; font-family: sans-serif;
-        }
-        .input-field:focus { border-color: #d4d4d8; }
-        .input-field::placeholder { color: #52525b; }
-
-        .btn-llm { padding-top: 0.625rem; padding-bottom: 0.625rem; margin-bottom: 0.5rem; }
-        .btn-llm:hover { border-left-color: #fff; background-color: rgba(255,255,255,0.05); }
-        .btn-babel { margin-top: 1rem; }
-        .btn-babel:hover { border-left-color: #f43f5e; background-color: rgba(244,63,94,0.05); }
-        
-        #llm-status { font-family: var(--font-mono); font-size: 0.625rem; color: #a3cba6; margin-top: 0.75rem; height: 1rem; transition: opacity 0.3s; }
-        .hidden { opacity: 0; pointer-events: none; }
-
-        #panel-toggle {
-            display: flex; position: absolute; left: 0; top: 33%; z-index: 10;
-            background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.1); border-left: none;
-            color: #a1a1aa; font-size: 0.75rem; padding: 1.5rem 0.25rem; border-radius: 0 6px 6px 0;
-            cursor: pointer; writing-mode: vertical-rl; text-orientation: mixed; align-items: center; justify-content: center;
-            pointer-events: auto; transition: opacity 0.3s, background 0.3s; box-shadow: 2px 0 10px rgba(0,0,0,0.3);
-        }
-        #panel-toggle:hover { background: rgba(255,255,255,0.1); color: #fff; }
-        @media (min-width: 768px) { #panel-toggle { display: none; } }
-
-        #poem-container {
-            position: absolute; right: 1.5rem; top: 4rem; width: 85vw; max-height: 75vh;
-            display: flex; flex-direction: column; text-align: right; z-index: 0;
-            padding-bottom: 3rem; overflow-y: auto; overflow-x: hidden; pointer-events: auto;
-            scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch;
-        }
-        #poem-container::-webkit-scrollbar { display: none; }
-        @media (min-width: 768px) {
-            #poem-container { right: 6rem; top: 50%; transform: translateY(-50%); width: 45vw; max-height: 80vh; }
-        }
-
-        /* 修复边界裁剪：用原生 text-shadow 替代 filter */
-        @keyframes textBreathe {
-            0%, 100% { text-shadow: 0 0 8px currentColor; opacity: 0.85; }
-            50% { text-shadow: 0 0 15px currentColor, 0 0 25px currentColor; opacity: 1; }
-        }
         #poem-canvas {
-            position: relative; width: 100%; min-height: 200px;
-            font-size: 1.75rem; color: #e4e4e7; letter-spacing: 0.05em;
-            animation: textBreathe 6s ease-in-out infinite; transition: color 2s ease;
-            overflow: visible; /* 强制允许光晕溢出 */
+            position: relative; width: 100%; height: auto; min-height: 250px;
+            transition: color 2s ease; 
         }
-        @media (min-width: 768px) { #poem-canvas { font-size: 2.5rem; } }
 
-        /* 字母回归最古典的衬线斜体，规避系统草书的渲染丑态 */
         .char {
-            position: absolute; font-family: var(--font-serif); font-style: italic; font-weight: 400;
-            transition: color 2s ease, opacity 1s ease; overflow: visible;
-            cursor: default; user-select: none; will-change: transform, opacity; line-height: 1;
+            position: absolute; font-family: 'Tangerine', cursive;
+            transition: color 2s ease, opacity 1s ease; cursor: default; user-select: none;
+            will-change: transform, opacity; line-height: 1;
+            /* 赋予额外的渲染空间，彻底消除方形切边 */
+            padding: 0.3em; margin: -0.3em; 
+            animation: charBreathe 6s ease-in-out infinite;
         }
+        
         .char.restoring { transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s ease, color 2s ease; }
 
-        #poem-author {
-            font-family: var(--font-serif); font-size: 0.75rem; color: #71717a; text-transform: uppercase;
-            letter-spacing: 0.1em; border-top: 1px solid rgba(63,63,70,0.8); padding-top: 0.75rem; margin-top: 1.5rem;
-            align-self: flex-end; transition: color 2s ease, border-color 2s ease, opacity 1s ease;
-        }
-        @media (min-width: 768px) { #poem-author { font-size: 0.875rem; } }
-        
-        #poem-translation {
-            font-family: var(--font-zh); font-size: 0.65rem; color: rgba(82,82,91,0.8);
-            letter-spacing: 0.1em; line-height: 1.8; margin-top: 0.75rem; transition: color 2s ease, opacity 1s ease;
-        }
-        @media (min-width: 768px) { #poem-translation { font-size: 0.75rem; margin-top: 0.75rem; } }
+        .author-text { transition: color 2s ease, border-color 2s ease, opacity 1s ease; }
+        .translation-text { font-family: 'Noto Serif SC', serif; transition: color 2s ease, opacity 1s ease; }
 
-        .babel-active { color: #f43f5e !important; border-left-color: rgba(244, 63, 94, 0.5) !important; text-shadow: 0 0 8px rgba(244, 63, 94, 0.5); }
-        
-        /* 模态框配置面板 */
-        #settings-modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); z-index: 50; justify-content: center; align-items: center;
-            pointer-events: auto; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
-        }
-        .modal-content {
-            background: #18181b; border: 1px solid #3f3f46; padding: 2rem; border-radius: 8px;
-            width: 90%; max-width: 400px; font-family: sans-serif; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-        .modal-title { font-size: 1.25rem; color: #e4e4e7; margin-bottom: 1rem; border-bottom: 1px solid #3f3f46; padding-bottom: 0.5rem; font-family: var(--font-serif); font-style: italic; }
-        .modal-label { display: block; font-size: 0.75rem; color: #a1a1aa; margin-bottom: 0.25rem; font-family: var(--font-mono); }
-        .modal-input { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid #3f3f46; color: #d4d4d8; font-size: 0.875rem; padding: 0.5rem 0.75rem; margin-bottom: 1rem; border-radius: 4px; outline: none; }
-        .modal-input:focus { border-color: #71717a; }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem; }
-        .btn-cancel { background: none; border: none; color: #a1a1aa; font-size: 0.875rem; cursor: pointer; padding: 0.5rem 1rem; }
-        .btn-cancel:hover { color: #fff; }
-        .btn-save { background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7; font-size: 0.875rem; cursor: pointer; padding: 0.5rem 1rem; border-radius: 4px; transition: background 0.3s; }
-        .btn-save:hover { background: #3f3f46; }
+        .control-btn { transition: all 0.3s ease; font-family: 'Cormorant Garamond', serif; letter-spacing: 0.05em; flex-shrink: 0; }
+        .control-btn:hover { background-color: rgba(255, 255, 255, 0.08); transform: translateX(5px); }
 
-        /* 移动端菜单底部的关闭按钮 */
-        .mobile-close-bottom { display: block; text-align: center; color: #71717a; padding: 1rem 0; margin-top: 1rem; border-top: 1px dashed rgba(63,63,70,0.5); cursor: pointer; font-size: 0.75rem; transition: color 0.3s; flex-shrink: 0; }
-        .mobile-close-bottom:hover { color: #d4d4d8; }
-        @media (min-width: 768px) { .mobile-close-bottom { display: none; } }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
+
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; justify-content: space-between; }
+        .panel-interactive { pointer-events: auto; }
+        
+        .glass-panel {
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            background-color: rgba(10, 10, 12, 0.4); border-right: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 10px 0 30px rgba(0,0,0,0.5); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), background-color 2s ease;
+        }
+        
+        .scrollable-panel { max-height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; -webkit-overflow-scrolling: touch; }
+        .scrollable-panel::-webkit-scrollbar { width: 3px; }
+        .scrollable-panel::-webkit-scrollbar-track { background: transparent; }
+        .scrollable-panel::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+
+        .poem-scroll { overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; }
+        .poem-scroll::-webkit-scrollbar { display: none; }
+
+        #panel-toggle { pointer-events: auto; writing-mode: vertical-rl; text-orientation: mixed; transition: opacity 0.3s ease; }
+        
+        .babel-active { color: #f43f5e !important; border-color: rgba(244, 63, 94, 0.3) !important; text-shadow: 0 0 8px rgba(244, 63, 94, 0.5); }
+        
+        /* 模态框样式 */
+        #settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 50; justify-content: center; align-items: center; pointer-events: auto; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+        .modal-content { background: #18181b; border: 1px solid #3f3f46; padding: 2rem; border-radius: 8px; width: 90%; max-width: 400px; font-family: sans-serif; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
     </style>
 </head>
-<body id="main-body">
+<body class="selection:bg-zinc-700 selection:text-white" id="main-body">
 
     <canvas id="mothCanvas"></canvas>
 
     <div id="ui-layer">
         
-        <!-- 点击此层自动关闭面板 -->
-        <div id="mobile-click-shield" onclick="togglePanel()"></div>
-
-        <div id="control-panel" class="panel-interactive">
+        <!-- 左侧控制面板 -->
+        <div id="control-panel" class="panel-interactive scrollable-panel glass-panel absolute left-0 top-0 h-full flex flex-col space-y-4 pl-6 md:pl-8 pr-4 w-[75vw] max-w-[20rem] md:max-w-[22rem] md:w-80 py-8 z-20 transform -translate-x-full md:translate-x-0">
             
-            <div class="panel-header">
-                <h1 class="panel-title" id="panel-title">Lepidoptera</h1>
-                <button onclick="togglePanel()" class="close-btn">✕</button>
+            <div class="flex justify-between items-start flex-shrink-0 mb-2">
+                <h1 class="text-xl md:text-2xl text-zinc-300 italic border-b border-zinc-700/50 pb-2 flex-grow mr-4 transition-colors duration-1000" id="panel-title">Lepidoptera</h1>
+                <button onclick="togglePanel()" class="md:hidden text-zinc-500 hover:text-white text-xl px-2">✕</button>
             </div>
 
-            <p class="status-text">
-                Render: Native High-DPR CSS<br>
-                Acoustics: <span class="status-highlight">Brownian Noise Floor</span><br>
-                Physics: <span class="status-highlight">Text Entropy Active</span><br>
-                <span class="counter-box">Active Entities: <span id="moth-counter" style="color:#fff;">0</span></span>
+            <p class="text-[11px] md:text-xs text-zinc-400 mb-2 font-sans flex-shrink-0 leading-relaxed">
+                Build: Aesthetic Restoration Core<br>
+                Acoustics: <span class="text-zinc-200">Brownian Noise Floor</span><br>
+                Physics: <span class="text-zinc-200">Text Entropy Active</span><br>
+                <span class="text-zinc-300 mt-3 block border-t border-zinc-700/30 pt-2 font-mono tracking-wider">Active Entities: <span id="moth-counter" class="text-white">0</span></span>
             </p>
 
-            <button onclick="cycleSeason()" class="control-btn" style="background:rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-                <span>[ Season: <span id="season-display" style="font-style:italic;">Summer</span> ]</span>
-                <span style="font-family:var(--font-mono); font-size:0.625rem; color:#71717a;">环境同步</span>
+            <button onclick="cycleSeason()" class="control-btn text-left text-zinc-200 py-2 border-l-2 border-transparent hover:border-white pl-3 mb-2 bg-white/5 rounded-r-md mt-2 flex justify-between items-center pr-4">
+                <span>[ Season: <span id="season-display" class="italic">Summer</span> ]</span>
+                <span class="text-[10px] text-zinc-500 font-mono">环境同步</span>
             </button>
             
-            <button onclick="spawnMoth('luna')" class="control-btn btn-luna">
-                Actias luna<br><span class="btn-desc desc-luna">月神尾蛾 | 莹绿</span>
+            <button onclick="spawnMoth('luna')" class="control-btn text-left text-zinc-300 py-2 border-l-2 border-transparent hover:border-[#a3cba6] pl-3">
+                Actias luna<br><span class="text-[10px] md:text-xs text-[#a3cba6]/80 italic">月神尾蛾 | 原初莹绿</span>
             </button>
-            <button onclick="spawnMoth('atlas')" class="control-btn btn-atlas">
-                Attacus atlas<br><span class="btn-desc desc-atlas">皇蛾 | 赤褐</span>
+            <button onclick="spawnMoth('atlas')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#f97316] pl-3">
+                Attacus atlas<br><span class="text-[10px] md:text-xs text-zinc-500 italic">皇蛾 | 炭黑 · 赤橘</span>
             </button>
-            <button onclick="spawnMoth('rosy')" class="control-btn btn-rosy">
-                Dryocampa rubicunda<br><span class="btn-desc desc-rosy">玫瑰枫叶蛾 | 枯粉</span>
+            <button onclick="spawnMoth('rosy')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#f472b6] pl-3">
+                Dryocampa rubicunda<br><span class="text-[10px] md:text-xs text-zinc-500 italic">玫瑰枫叶蛾 | 铅白 · 玫粉</span>
             </button>
-            <button onclick="spawnMoth('deathshead')" class="control-btn btn-deathshead">
-                Acherontia<br><span class="btn-desc desc-deathshead">鬼脸天蛾 | 暗琥珀</span>
-            </button>
-
-            <div class="divider" id="divider-1"></div>
-
-            <button onclick="spawnMoth('comet')" class="control-btn btn-comet">
-                Argema mittrei<br><span class="btn-desc desc-comet">彗星蛾 | 月光黄</span>
-            </button>
-            <button onclick="spawnMoth('cinnabar')" class="control-btn btn-cinnabar">
-                Tyria jacobaeae<br><span class="btn-desc desc-cinnabar">朱砂蛾 | 铁锈红</span>
-            </button>
-            <button onclick="spawnMoth('cyan')" class="control-btn btn-cyan">
-                Cyan Hawk<br><span class="btn-desc desc-cyan">青蓝夜蛾 | 灰蓝</span>
-            </button>
-            <button onclick="spawnMoth('orchid')" class="control-btn btn-orchid">
-                Orchid Glider<br><span class="btn-desc desc-orchid">兰花碎影 | 暮紫</span>
+            <button onclick="spawnMoth('deathshead')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#fbbf24] pl-3">
+                Acherontia<br><span class="text-[10px] md:text-xs text-zinc-500 italic">鬼脸天蛾 | 沥青 · 琥珀</span>
             </button>
 
-            <button onclick="clearMoths()" class="control-btn btn-erase">
-                [ Erase All ]<br><span class="btn-desc" style="color:#71717a;">归零</span>
+            <div class="h-px w-full bg-zinc-800/80 my-3 flex-shrink-0 transition-colors duration-1000" id="divider-1"></div>
+
+            <button onclick="spawnMoth('comet')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#fde047] pl-3">
+                Argema mittrei<br><span class="text-[10px] md:text-xs text-zinc-500 italic">彗星蛾 | 银灰 · 辉黄</span>
+            </button>
+            <button onclick="spawnMoth('cinnabar')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#ef4444] pl-3">
+                Tyria jacobaeae<br><span class="text-[10px] md:text-xs text-zinc-500 italic">朱砂蛾 | 曜黑 · 猩红</span>
+            </button>
+            <button onclick="spawnMoth('cyan')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#22d3ee] pl-3">
+                Cyan Hawk<br><span class="text-[10px] md:text-xs text-zinc-500 italic">青蓝夜蛾 | 铁灰 · 霓虹蓝</span>
+            </button>
+            <button onclick="spawnMoth('orchid')" class="control-btn text-left text-zinc-400 py-2 border-l-2 border-transparent hover:border-[#d946ef] pl-3">
+                Orchid Glider<br><span class="text-[10px] md:text-xs text-zinc-500 italic">兰花碎影 | 暖沙 · 品红</span>
             </button>
 
-            <div class="api-section" id="divider-2">
-                <div class="api-header">
-                    <p class="api-title">Coproc. / LLM Core</p>
-                    <button onclick="openSettings()" class="settings-btn" title="API Settings">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <button onclick="clearMoths()" class="control-btn text-left text-zinc-500 py-2 border-l-2 border-transparent hover:border-zinc-300 hover:text-zinc-200 pl-3 mt-4">
+                [ Erase All ]<br><span class="text-[11px] text-zinc-600 italic">归零</span>
+            </button>
+
+            <!-- LLM 接口 -->
+            <div class="mt-4 border-t border-zinc-700/50 pt-5 flex-shrink-0 transition-colors duration-1000" id="divider-2">
+                <div class="flex justify-between items-center mb-3">
+                    <p class="text-[10px] md:text-[11px] text-zinc-500 font-mono tracking-widest uppercase">Coproc. / LLM Core</p>
+                    <!-- 扩大了触控面积，禁用了 SVG 原生的鼠标事件响应，防止事件阻断 -->
+                    <button onclick="openSettings(); return false;" class="text-zinc-500 hover:text-zinc-300 transition-colors p-2 -mr-2" title="API Settings">
+                        <svg style="pointer-events: none;" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     </button>
                 </div>
-                <input id="mood-input" type="text" placeholder="输入情绪碎片..." class="input-field">
-                <button onclick="synthesizeMoth()" class="control-btn btn-llm">
-                    ✨ 情绪算绘<br><span class="btn-desc" style="font-family:var(--font-mono);">Synthesize</span>
+                <input id="mood-input" type="text" placeholder="输入情绪碎片..." class="w-full bg-black/50 border border-zinc-700/80 text-zinc-200 text-sm px-3 py-2 mb-3 focus:outline-none focus:border-[#d4d4d8] rounded-sm placeholder-zinc-600 transition-colors">
+                <button onclick="synthesizeMoth()" class="control-btn text-left text-zinc-300 py-2.5 border-l-2 border-transparent hover:border-white hover:bg-white/5 pl-3 w-full">
+                    ✨ 情绪算绘<br><span class="text-[10px] text-zinc-500 italic font-mono">Synthesize</span>
                 </button>
-                <button onclick="rewritePoem()" class="control-btn btn-llm">
-                    ✨ 重构引力场<br><span class="btn-desc" style="font-family:var(--font-mono);">Rewrite Coordinates</span>
+                <button onclick="rewritePoem()" class="control-btn text-left text-zinc-400 py-2.5 border-l-2 border-transparent hover:border-white hover:bg-white/5 pl-3 w-full mt-2">
+                    ✨ 重构引力场<br><span class="text-[10px] text-zinc-500 italic font-mono">Rewrite Coordinates</span>
                 </button>
                 
-                <button id="babel-btn" onclick="toggleBabelProtocol()" class="control-btn btn-babel">
-                    [ The Babel Protocol ]<br><span class="btn-desc" style="font-family:var(--font-mono);">启用语言坍缩</span>
+                <button id="babel-btn" onclick="toggleBabelProtocol()" class="control-btn text-left text-zinc-500 py-2.5 border-l-2 border-transparent hover:border-rose-500 hover:bg-rose-500/5 pl-3 w-full mt-4 transition-colors">
+                    [ The Babel Protocol ]<br><span class="text-[9px] text-zinc-600 italic font-mono">启用语言坍缩</span>
                 </button>
 
-                <div id="llm-status" class="hidden">Processing...</div>
+                <div id="llm-status" class="text-[10px] font-mono text-[#a3cba6] mt-3 h-4 hidden transition-opacity">Processing...</div>
             </div>
-            
-            <!-- 移动端底部的收束出口 -->
-            <div class="mobile-close-bottom" onclick="togglePanel()">
-                [ CLOSE MENU ]
-            </div>
+            <div class="h-12 flex-shrink-0"></div>
         </div>
 
-        <div id="panel-toggle" onclick="togglePanel()"><span>[+] MENU</span></div>
+        <div id="panel-toggle" onclick="togglePanel()" class="md:hidden absolute left-0 top-1/3 bg-white/5 backdrop-blur-md border border-white/10 text-zinc-400 text-xs py-6 px-1 rounded-r-md cursor-pointer hover:bg-white/10 z-10 flex items-center justify-center shadow-lg">
+            <span>[+] MENU</span>
+        </div>
 
-        <!-- 右侧文本展示区 -->
-        <div id="poem-container" class="panel-interactive poem-scroll" onscroll="updateGravityOnScroll()">
-            <div id="poem-canvas"></div>
-            <div id="poem-author">Sonnet 43 — W. Shakespeare</div>
-            <div id="poem-translation">
+        <!-- 右侧文本展示区：改为全局居中对齐，修正空洞感 -->
+        <div id="poem-container" class="panel-interactive poem-scroll absolute right-6 md:right-24 top-0 h-full w-[85vw] md:w-5/12 text-right flex flex-col justify-center z-0 pb-12" onscroll="updateGravityOnScroll()">
+            
+            <!-- 文字粒子容器 -->
+            <div id="poem-canvas" class="text-[2.5rem] md:text-6xl text-zinc-200 tracking-wider">
+                <!-- 由 JS 注入 -->
+            </div>
+            
+            <div id="poem-author" class="author-text text-zinc-500 text-[10px] md:text-sm mt-6 md:mt-8 tracking-widest uppercase border-t border-zinc-800/80 pt-3 inline-block ml-auto">
+                Sonnet 43 — W. Shakespeare
+            </div>
+
+            <!-- 翻译区：增加行高，提升呼吸感 -->
+            <div id="poem-translation" class="translation-text text-zinc-600/80 text-[11px] md:text-[13px] mt-4 md:mt-6 tracking-widest leading-[2.2]">
                 当合上双眼，我才看的最清，<br>
                 因为白日所见无非庸常之物；<br>
                 但在睡梦中，我却能在暗里见你。
@@ -321,29 +179,29 @@
         </div>
     </div>
 
-    <!-- 配置模态框 -->
+    <!-- 配置模态框 (Modal) -->
     <div id="settings-modal">
         <div class="modal-content">
-            <h2 class="modal-title">System Settings / LLM</h2>
+            <h2 class="text-xl text-zinc-200 mb-4 border-b border-zinc-700 pb-2 font-serif italic">System Settings / LLM</h2>
             
-            <label class="modal-label">API Base URL</label>
-            <input id="api-url" type="text" class="modal-input" placeholder="e.g., https://api.deepseek.com/v1/chat/completions">
+            <label class="block text-xs text-zinc-400 mb-1 font-mono">API Base URL</label>
+            <input id="api-url" type="text" class="w-full bg-black/50 border border-zinc-700 text-zinc-300 text-sm px-3 py-2 mb-4 rounded focus:outline-none focus:border-zinc-500" placeholder="e.g., https://api.deepseek.com/v1/chat/completions">
             
-            <label class="modal-label">API Key</label>
-            <input id="api-key" type="password" class="modal-input" placeholder="sk-...">
+            <label class="block text-xs text-zinc-400 mb-1 font-mono">API Key</label>
+            <input id="api-key" type="password" class="w-full bg-black/50 border border-zinc-700 text-zinc-300 text-sm px-3 py-2 mb-4 rounded focus:outline-none focus:border-zinc-500" placeholder="sk-...">
             
-            <label class="modal-label">Model ID</label>
-            <input id="api-model" type="text" class="modal-input" placeholder="e.g., deepseek-chat">
+            <label class="block text-xs text-zinc-400 mb-1 font-mono">Model ID</label>
+            <input id="api-model" type="text" class="w-full bg-black/50 border border-zinc-700 text-zinc-300 text-sm px-3 py-2 mb-6 rounded focus:outline-none focus:border-zinc-500" placeholder="e.g., deepseek-chat">
             
-            <div class="modal-actions">
-                <button onclick="closeSettings()" class="btn-cancel">Cancel</button>
-                <button onclick="saveSettings()" class="btn-save">Save locally</button>
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeSettings()" class="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancel</button>
+                <button onclick="saveSettings()" class="px-4 py-2 text-sm bg-zinc-800 text-zinc-200 hover:bg-zinc-700 rounded transition-colors">Save</button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- 本地配置管理 ---
+        // --- API 配置管理 ---
         const cfgKeys = { url: 'moth_api_url', key: 'moth_api_key', model: 'moth_api_model' };
         
         function getConfigs() {
@@ -354,24 +212,29 @@
             };
         }
 
-        function openSettings() {
+        window.openSettings = function() {
+            playKeyClick();
             const cfg = getConfigs();
             document.getElementById('api-url').value = cfg.url;
             document.getElementById('api-key').value = cfg.key;
             document.getElementById('api-model').value = cfg.model;
             document.getElementById('settings-modal').style.display = 'flex';
-        }
+        };
 
-        function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+        window.closeSettings = function() {
+            playKeyClick();
+            document.getElementById('settings-modal').style.display = 'none';
+        };
 
-        function saveSettings() {
+        window.saveSettings = function() {
+            playKeyClick();
             localStorage.setItem(cfgKeys.url, document.getElementById('api-url').value.trim());
             localStorage.setItem(cfgKeys.key, document.getElementById('api-key').value.trim());
             localStorage.setItem(cfgKeys.model, document.getElementById('api-model').value.trim());
             closeSettings();
-        }
+        };
 
-        // --- Web Audio 引擎 ---
+        // --- Web Audio 引擎：布朗底噪与环境音效 ---
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx, ambientSource, ambientFilter, ambientGain, spaceLfo, spaceLfoGain; 
         const pentatonicHigh = [440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
@@ -455,14 +318,16 @@
             osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1.2);
         }
 
-        document.addEventListener('click', () => { if(!audioCtx) initAudio(); }, {once: true});
+        document.addEventListener('click', (e) => { 
+            // 防止重复触发和事件阻塞
+            if(!audioCtx) initAudio(); 
+        }, {once: true});
 
         // --- 视觉与交互 ---
         const canvas = document.getElementById('mothCanvas'); const ctx = canvas.getContext('2d');
         const poemContainer = document.getElementById('poem-container'); const poemCanvas = document.getElementById('poem-canvas');
         const poemAuthor = document.getElementById('poem-author'); const poemTranslation = document.getElementById('poem-translation');
         const controlPanel = document.getElementById('control-panel'); const panelToggleBtn = document.getElementById('panel-toggle');
-        const shield = document.getElementById('mobile-click-shield');
         const seasonDisplay = document.getElementById('season-display'); const babelBtn = document.getElementById('babel-btn');
         
         let width, height, moths = [], gravityX, gravityY, isPanelOpen = window.innerWidth >= 768;
@@ -474,16 +339,10 @@
             canvas.width = width * dpr; canvas.height = height * dpr; canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
             ctx.scale(dpr, dpr); calculateGravity();
             
-            if (window.innerWidth >= 768) { 
-                isPanelOpen = true; controlPanel.style.transform = 'translateX(0)'; panelToggleBtn.style.opacity = '0'; shield.style.display = 'none';
-            } 
-            else {
-                controlPanel.style.transform = isPanelOpen ? 'translateX(0)' : 'translateX(-100%)';
-                panelToggleBtn.style.opacity = isPanelOpen ? '0' : '1';
-                shield.style.display = isPanelOpen ? 'block' : 'none';
-            }
+            if (window.innerWidth >= 768) { isPanelOpen = true; controlPanel.classList.remove('-translate-x-full'); controlPanel.classList.add('translate-x-0'); panelToggleBtn.style.opacity = '0'; panelToggleBtn.style.pointerEvents = 'none'; } 
+            else if (!isPanelOpen) { panelToggleBtn.style.opacity = '1'; panelToggleBtn.style.pointerEvents = 'auto'; }
         }
-        window.addEventListener('resize', resize); function updateGravityOnScroll() { calculateGravity(); }
+        window.addEventListener('resize', resize); window.updateGravityOnScroll = function() { calculateGravity(); };
 
         const seasons = ['Summer', 'Autumn', 'Winter', 'Spring']; let currentSeasonIndex = 0, envParticles = [], snowStartTime = 0;
         const envConfig = {
@@ -537,12 +396,12 @@
             }
         }
 
-        function cycleSeason() {
+        window.cycleSeason = function() {
             playKeyClick(); currentSeasonIndex = (currentSeasonIndex + 1) % seasons.length; const sName = seasons[currentSeasonIndex];
             seasonDisplay.innerText = sName; poemCanvas.style.color = envConfig[sName].textColor; poemAuthor.style.color = envConfig[sName].textColor;
             poemAuthor.style.borderColor = envConfig[sName].authorBorder; poemTranslation.style.color = envConfig[sName].translationColor;
             controlPanel.style.backgroundColor = envConfig[sName].panelColor; updateAcousticFloor(sName); initEnvParticles(sName);
-        }
+        };
 
         // --- 文本物理系统 ---
         let textParticles = [], isBabelActive = false; const alienChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789§¶†‡";
@@ -551,15 +410,15 @@
         function initTextPhysics(lines) {
             poemCanvas.innerHTML = ''; textParticles = [];
             const tempDiv = document.createElement('div'); tempDiv.style.position = 'absolute'; tempDiv.style.visibility = 'hidden'; tempDiv.style.whiteSpace = 'nowrap'; 
-            tempDiv.style.fontFamily = "var(--font-serif)"; tempDiv.style.fontStyle = "italic"; tempDiv.style.fontSize = window.innerWidth < 768 ? "1.75rem" : "2.5rem"; 
+            tempDiv.style.fontFamily = "'Tangerine', cursive"; tempDiv.style.fontSize = window.innerWidth < 768 ? "2.5rem" : "3.75rem"; 
             poemCanvas.appendChild(tempDiv);
             
-            let currentY = 0; const lineHeight = window.innerWidth < 768 ? 32 : 48; 
+            let currentY = 0; const lineHeight = window.innerWidth < 768 ? 44 : 70; 
             lines.forEach((line) => {
                 let currentX = 0; const chars = Array.from(line);
                 tempDiv.innerText = line; currentX = poemCanvas.offsetWidth - tempDiv.offsetWidth;
                 chars.forEach((char) => {
-                    if (char === ' ') { currentX += window.innerWidth < 768 ? 8 : 12; return; }
+                    if (char === ' ') { currentX += window.innerWidth < 768 ? 10 : 15; return; }
                     tempDiv.innerText = char; const charWidth = tempDiv.offsetWidth;
                     const span = document.createElement('span'); span.innerText = char; span.className = 'char';
                     span.style.left = `${currentX}px`; span.style.top = `${currentY}px`; poemCanvas.appendChild(span);
@@ -602,33 +461,36 @@
 
         poemContainer.addEventListener('mousemove', restoreText); poemContainer.addEventListener('touchmove', (e) => { e.preventDefault(); restoreText(e); }, {passive: false});
 
-        function toggleBabelProtocol() {
+        window.toggleBabelProtocol = function() {
             playKeyClick(); isBabelActive = !isBabelActive;
-            if (isBabelActive) { babelBtn.classList.add('babel-active'); babelBtn.innerHTML = `[ The Babel Protocol ]<br><span class="btn-desc" style="color:inherit;">警告：意义坍缩中...</span>`; } 
-            else { babelBtn.classList.remove('babel-active'); babelBtn.innerHTML = `[ The Babel Protocol ]<br><span class="btn-desc" style="color:inherit;">启用语言坍缩</span>`; textParticles.forEach(p => { p.element.innerText = p.char; p.element.style.opacity = 1; }); }
-        }
+            if (isBabelActive) { babelBtn.classList.add('babel-active'); babelBtn.innerHTML = `[ The Babel Protocol ]<br><span class="text-[9px] italic font-mono">警告：意义坍缩中...</span>`; } 
+            else { babelBtn.classList.remove('babel-active'); babelBtn.innerHTML = `[ The Babel Protocol ]<br><span class="text-[9px] text-zinc-600 italic font-mono">启用语言坍缩</span>`; textParticles.forEach(p => { p.element.innerText = p.char; p.element.style.opacity = 1; }); }
+        };
 
-        function togglePanel() { 
+        window.togglePanel = function() { 
             playKeyClick(); isPanelOpen = !isPanelOpen; 
-            controlPanel.style.transform = isPanelOpen ? 'translateX(0)' : 'translateX(-100%)';
-            panelToggleBtn.style.opacity = isPanelOpen ? '0' : '1'; 
-            shield.style.display = (isPanelOpen && window.innerWidth < 768) ? 'block' : 'none';
-        }
+            controlPanel.classList.toggle('-translate-x-full', !isPanelOpen); controlPanel.classList.toggle('translate-x-0', isPanelOpen);
+            panelToggleBtn.style.opacity = isPanelOpen ? '0' : '1'; panelToggleBtn.style.pointerEvents = isPanelOpen ? 'none' : 'auto';
+        };
 
-        // --- 蛾类物理引擎 色彩同步 ---
+        // --- 蛾类物理引擎 ---
         const speciesData = {
-            luna: { bodyColor: '#3c4a3e', colors: ['#8ebd91', '#a3cba6', '#c8e6c9'], baseAlpha: 0.8, scale: 1.5, mass: 1.0, flapSpeed: 0.15, geometry: { forewing: [[0,0], [30,-40], [60,-20], [40,10], [0,0]], hindwing: [[0,0], [35,10], [20,60], [10,40], [0,0]], accent: [[25,-15], [40,-5], [30,5]] }, flightBehavior: (m,t) => { m.vx += Math.sin(t*0.5)*0.2; m.vy += Math.cos(t*0.3)*0.15; m.vx += (gravityX-m.x)*0.0001; m.vy += (gravityY-m.y)*0.0001; } },
-            atlas: { bodyColor: '#2b1d16', colors: ['#8b5a45', '#b48a66', '#d2b48c'], baseAlpha: 0.65, scale: 2.2, mass: 2.5, flapSpeed: 0.08, geometry: { forewing: [[0,0], [50,-30], [80,-10], [60,20], [20,10]], hindwing: [[0,0], [40,15], [50,40], [20,30], [0,0]], accent: [[60,-5], [70,5], [50,15]] }, flightBehavior: (m,t) => { m.vx += Math.sin(t*0.2)*0.1; m.vy += Math.cos(t*0.15)*0.1; m.vy += 0.05; m.vx += (gravityX-m.x)*0.00005; m.vy += (gravityY-m.y)*0.0001; } },
-            rosy: { bodyColor: '#52434b', colors: ['#bca4ac', '#d1a3a4', '#e6c5c8'], baseAlpha: 0.8, scale: 0.6, mass: 0.4, flapSpeed: 0.4, geometry: { forewing: [[0,0], [20,-20], [35,0], [20,15], [0,0]], hindwing: [[0,0], [15,10], [20,25], [5,20], [0,0]], accent: [[10,-5], [25,0], [15,5]] }, flightBehavior: (m,t) => { m.vx += (Math.random()-0.5)*0.8; m.vy += (Math.random()-0.5)*0.8; m.vx += (gravityX-m.x)*0.0005; m.vy += (gravityY-m.y)*0.0005; } },
-            deathshead: { bodyColor: '#1c1917', colors: ['#5c4a3d', '#c9b07a', '#786048'], baseAlpha: 0.7, scale: 1.2, mass: 1.5, flapSpeed: 0.25, geometry: { forewing: [[0,0], [25,-35], [50,-10], [30,15], [0,0]], hindwing: [[0,0], [25,5], [30,25], [10,15], [0,0]], accent: [[15,-10], [30,-5], [20,5]] }, flightBehavior: (m,t) => { if(Math.random()<0.02){ m.targetVx = (gravityX-m.x)*0.01; m.targetVy = (gravityY-m.y)*0.01; } m.vx += (m.targetVx-m.vx)*0.1; m.vy += (m.targetVy-m.vy)*0.1; } },
-            comet: { bodyColor: '#2d332d', colors: ['#a9b0a0', '#c8c6a7', '#e2e0c1'], baseAlpha: 0.4, scale: 1.8, mass: 0.8, flapSpeed: 0.14, geometry: { forewing: [[0,0], [25,-45], [55,-15], [30,10], [0,0]], hindwing: [[0,0], [15,5], [8,40], [4,80], [2,110], [0,80], [2,40], [0,0]], accent: [[15,-15], [30,-10], [20,5]] }, flightBehavior: (m,t) => { m.vx += Math.sin(t*0.4)*0.25; m.vy += Math.cos(t*0.2)*0.2; m.vx += (gravityX-m.x)*0.0001; m.vy += (gravityY-m.y)*0.0001; } },
-            cinnabar: { bodyColor: '#1a1010', colors: ['#4a2c2c', '#a45a52', '#7a3e38'], baseAlpha: 0.85, scale: 1.1, mass: 0.9, flapSpeed: 0.2, geometry: { forewing: [[0,0], [25,-25], [40,-5], [25,20], [0,0]], hindwing: [[0,0], [25,15], [30,35], [10,30], [0,0]], accent: [[15,15], [25,25], [10,20]] }, flightBehavior: (m,t) => { m.vx += Math.cos(t*0.3)*0.15; m.vy += Math.sin(t*0.5)*0.15; m.vx += (gravityX-m.x)*0.0002; m.vy += (gravityY-m.y)*0.0002; } },
-            cyan: { bodyColor: '#1c2429', colors: ['#4b5f68', '#7a9fa9', '#587c88'], baseAlpha: 0.55, scale: 1.0, mass: 0.6, flapSpeed: 0.5, geometry: { forewing: [[0,0], [15,-45], [45,-5], [10,5], [0,0]], hindwing: [[0,0], [15,0], [20,20], [5,10], [0,0]], accent: [[10,-20], [25,-10], [5,-5]] }, flightBehavior: (m,t) => { if(t%80<10){ m.vx += (gravityX-m.x)*0.01+(Math.random()-0.5)*8; m.vy += (gravityY-m.y)*0.01+(Math.random()-0.5)*8; } m.vx *= 0.9; m.vy *= 0.9; } },
-            orchid: { bodyColor: '#2b2329', colors: ['#6f5e6a', '#a98b9f', '#887282'], baseAlpha: 0.6, scale: 0.9, mass: 0.5, flapSpeed: 0.3, geometry: { forewing: [[0,0], [15,-20], [25,-25], [35,-10], [30,0], [40,10], [20,15], [0,0]], hindwing: [[0,0], [20,5], [30,15], [15,25], [20,35], [5,20], [0,0]], accent: [[15,-5], [25,-10], [20,5]] }, flightBehavior: (m,t) => { m.vx += (Math.random()-0.5)*0.5; m.vy += (Math.random()-0.5)*0.5-0.05; m.vx += (gravityX-m.x)*0.0003; m.vy += (gravityY-m.y)*0.0003; } }
+            luna: { bodyColor: '#3c4a3e', colors: ['#a3cba6', '#c8e6c9', '#8ebd91'], baseAlpha: 0.8, scale: 1.5, mass: 1.0, flapSpeed: 0.15, geometry: { forewing: [[0,0], [30,-40], [60,-20], [40,10], [0,0]], hindwing: [[0,0], [35,10], [20,60], [10,40], [0,0]], accent: [[25,-15], [40,-5], [30,5]] }, flightBehavior: (m,t) => { m.vx += Math.sin(t*0.5)*0.2; m.vy += Math.cos(t*0.3)*0.15; m.vx += (gravityX-m.x)*0.0001; m.vy += (gravityY-m.y)*0.0001; } },
+            atlas: { bodyColor: '#09090b', colors: ['#27272a', '#18181b', '#f97316'], baseAlpha: 0.65, scale: 2.2, mass: 2.5, flapSpeed: 0.08, geometry: { forewing: [[0,0], [50,-30], [80,-10], [60,20], [20,10]], hindwing: [[0,0], [40,15], [50,40], [20,30], [0,0]], accent: [[60,-5], [70,5], [50,15]] }, flightBehavior: (m,t) => { m.vx += Math.sin(t*0.2)*0.1; m.vy += Math.cos(t*0.15)*0.1; m.vy += 0.05; m.vx += (gravityX-m.x)*0.00005; m.vy += (gravityY-m.y)*0.0001; } },
+            rosy: { bodyColor: '#3f3f46', colors: ['#d4d4d8', '#a1a1aa', '#f472b6'], baseAlpha: 0.8, scale: 0.6, mass: 0.4, flapSpeed: 0.4, geometry: { forewing: [[0,0], [20,-20], [35,0], [20,15], [0,0]], hindwing: [[0,0], [15,10], [20,25], [5,20], [0,0]], accent: [[10,-5], [25,0], [15,5]] }, flightBehavior: (m,t) => { m.vx += (Math.random()-0.5)*0.8; m.vy += (Math.random()-0.5)*0.8; m.vx += (gravityX-m.x)*0.0005; m.vy += (gravityY-m.y)*0.0005; } },
+            deathshead: { bodyColor: '#000000', colors: ['#1c1917', '#292524', '#fbbf24'], baseAlpha: 0.7, scale: 1.2, mass: 1.5, flapSpeed: 0.25, geometry: { forewing: [[0,0], [25,-35], [50,-10], [30,15], [0,0]], hindwing: [[0,0], [25,5], [30,25], [10,15], [0,0]], accent: [[15,-10], [30,-5], [20,5]] }, flightBehavior: (m,t) => { if(Math.random()<0.02){ m.targetVx = (gravityX-m.x)*0.01; m.targetVy = (gravityY-m.y)*0.01; } m.vx += (m.targetVx-m.vx)*0.1; m.vy += (m.targetVy-m.vy)*0.1; } },
+            comet: { bodyColor: '#1e293b', colors: ['#cbd5e1', '#94a3b8', '#fde047'], baseAlpha: 0.4, scale: 1.8, mass: 0.8, flapSpeed: 0.14, geometry: { forewing: [[0,0], [25,-45], [55,-15], [30,10], [0,0]], hindwing: [[0,0], [15,5], [8,40], [4,80], [2,110], [0,80], [2,40], [0,0]], accent: [[15,-15], [30,-10], [20,5]] }, flightBehavior: (m,t) => { m.vx += Math.sin(t*0.4)*0.25; m.vy += Math.cos(t*0.2)*0.2; m.vx += (gravityX-m.x)*0.0001; m.vy += (gravityY-m.y)*0.0001; } },
+            cinnabar: { bodyColor: '#000000', colors: ['#18181b', '#09090b', '#ef4444'], baseAlpha: 0.85, scale: 1.1, mass: 0.9, flapSpeed: 0.2, geometry: { forewing: [[0,0], [25,-25], [40,-5], [25,20], [0,0]], hindwing: [[0,0], [25,15], [30,35], [10,30], [0,0]], accent: [[15,15], [25,25], [10,20]] }, flightBehavior: (m,t) => { m.vx += Math.cos(t*0.3)*0.15; m.vy += Math.sin(t*0.5)*0.15; m.vx += (gravityX-m.x)*0.0002; m.vy += (gravityY-m.y)*0.0002; } },
+            cyan: { bodyColor: '#27272a', colors: ['#52525b', '#3f3f46', '#22d3ee'], baseAlpha: 0.55, scale: 1.0, mass: 0.6, flapSpeed: 0.5, geometry: { forewing: [[0,0], [15,-45], [45,-5], [10,5], [0,0]], hindwing: [[0,0], [15,0], [20,20], [5,10], [0,0]], accent: [[10,-20], [25,-10], [5,-5]] }, flightBehavior: (m,t) => { if(t%80<10){ m.vx += (gravityX-m.x)*0.01+(Math.random()-0.5)*8; m.vy += (gravityY-m.y)*0.01+(Math.random()-0.5)*8; } m.vx *= 0.9; m.vy *= 0.9; } },
+            orchid: { bodyColor: '#44403c', colors: ['#a8a29e', '#78716c', '#d946ef'], baseAlpha: 0.6, scale: 0.9, mass: 0.5, flapSpeed: 0.3, geometry: { forewing: [[0,0], [15,-20], [25,-25], [35,-10], [30,0], [40,10], [20,15], [0,0]], hindwing: [[0,0], [20,5], [30,15], [15,25], [20,35], [5,20], [0,0]], accent: [[15,-5], [25,-10], [20,5]] }, flightBehavior: (m,t) => { m.vx += (Math.random()-0.5)*0.5; m.vy += (Math.random()-0.5)*0.5-0.05; m.vx += (gravityX-m.x)*0.0003; m.vy += (gravityY-m.y)*0.0003; } }
         };
 
         class Moth {
-            constructor(type, startX, startY) { this.type = type; this.data = speciesData[type]; this.x = startX; this.y = startY; this.vx = (Math.random()-0.5)*2; this.vy = (Math.random()-0.5)*2; this.angle = 0; this.phaseOffset = Math.random()*Math.PI*2; this.orbitRadius = 40+Math.random()*250; this.orbitAngle = Math.random()*Math.PI*2; }
+            constructor(type, startX, startY) {
+                this.type = type; this.data = speciesData[type]; this.x = startX; this.y = startY;
+                this.vx = (Math.random()-0.5)*2; this.vy = (Math.random()-0.5)*2; this.angle = 0;
+                this.phaseOffset = Math.random()*Math.PI*2; this.orbitRadius = 40+Math.random()*250; this.orbitAngle = Math.random()*Math.PI*2;
+            }
             update(time) {
                 let mTime = time*0.01 + this.phaseOffset; let dx = gravityX-this.x, dy = gravityY-this.y, dist = Math.sqrt(dx*dx + dy*dy);
                 if (dist < 350) { this.orbitAngle += 0.008; this.vx += (gravityX + Math.cos(this.orbitAngle)*this.orbitRadius - this.x)*0.001; this.vy += (gravityY + Math.sin(this.orbitAngle)*this.orbitRadius - this.y)*0.001; this.data.flightBehavior(this, mTime); this.vx *= 0.94; this.vy *= 0.94; } else { this.data.flightBehavior(this, mTime); }
@@ -662,27 +524,18 @@
         async function fetchLLMWithBackoff(payload) {
             const cfg = getConfigs();
             if (!cfg.url || !cfg.key || !cfg.model) { openSettings(); throw new Error("Missing API Configuration"); }
-            
             const promptText = payload.contents[0].parts[0].text;
-            const openAIPayload = {
-                model: cfg.model,
-                messages: [ { role: "system", content: "You are a helpful assistant. Output valid JSON only." }, { role: "user", content: promptText } ],
-                response_format: { type: "json_object" }
-            };
-
+            const openAIPayload = { model: cfg.model, messages: [ { role: "system", content: "You are a helpful assistant. Output valid JSON only." }, { role: "user", content: promptText } ], response_format: { type: "json_object" } };
             const response = await fetch(cfg.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.key}` }, body: JSON.stringify(openAIPayload) });
             if (!response.ok) { if (response.status === 401) { openSettings(); throw new Error("Invalid API Key"); } throw new Error(`API Error: ${response.status}`); }
-            
             const data = await response.json(); const contentText = data.choices[0].message.content;
             try { return JSON.parse(contentText); } catch (e) { throw new Error("Model did not return valid JSON."); }
         }
 
         window.synthesizeMoth = async function() {
-            playKeyClick();
-            const input = document.getElementById('mood-input').value || "微弱的混乱";
-            const statusEl = document.getElementById('llm-status'); statusEl.innerText = "算力接入中..."; statusEl.style.opacity = '1';
+            playKeyClick(); const input = document.getElementById('mood-input').value || "微弱的混乱"; const statusEl = document.getElementById('llm-status'); statusEl.innerText = "算力接入中..."; statusEl.style.opacity = '1';
             try {
-                const prompt = `分析情绪：“${input}”。转为虚拟飞蛾参数。严格使用低饱和度配色(Dusty colors)。严格返回以下 JSON 格式：\n{"id": "string", "name": "string", "bodyColor": "string(hex)", "c1": "string(hex)", "c2": "string(hex)", "accent": "string(hex)", "flapSpeed": number(0.05-0.9), "mass": number(0.2-2.5)}`;
+                const prompt = `分析情绪：“${input}”。转为虚拟飞蛾参数。严格返回以下 JSON 格式：\n{"id": "string (英文小写)", "name": "string (名字)", "bodyColor": "string (hex)", "c1": "string (hex)", "c2": "string (hex)", "accent": "string (hex)", "flapSpeed": number (0.05-0.9), "mass": number (0.2-2.5)}`;
                 const data = await fetchLLMWithBackoff({ contents: [{ parts: [{ text: prompt }] }] });
                 speciesData[data.id] = { bodyColor: data.bodyColor, colors: [data.c1, data.c2, data.accent], baseAlpha: 0.7, scale: 0.8+(data.mass*0.3), mass: data.mass, flapSpeed: data.flapSpeed, geometry: speciesData['luna'].geometry, flightBehavior: function(m, t) { m.vx+=(Math.random()-0.5)*data.flapSpeed; m.vy+=(Math.random()-0.5)*data.flapSpeed; } };
                 spawnMoth(data.id); document.getElementById('mood-input').value = ""; statusEl.innerText = `已重构: ${data.name}`;
@@ -691,8 +544,7 @@
         };
 
         window.rewritePoem = async function() {
-            playKeyClick();
-            const statusEl = document.getElementById('llm-status'); statusEl.innerText = "重新计算坐标系..."; statusEl.style.opacity = '1';
+            playKeyClick(); const statusEl = document.getElementById('llm-status'); statusEl.innerText = "重新计算坐标系..."; statusEl.style.opacity = '1';
             textParticles.forEach(p => p.element.style.opacity = 0); poemAuthor.style.opacity = 0; poemTranslation.style.opacity = 0;
             try {
                 const prompt = `写一首4-6行的英文诗，关于混乱、距离或重构。十四行诗风格。严格返回以下 JSON 格式：\n{"poemLines": ["第1行", "第2行"], "author": "作者名字", "translation": "对应的中文翻译，使用 <br> 换行"}`;
@@ -701,10 +553,7 @@
                     initTextPhysics(data.poemLines); poemAuthor.innerText = data.author; poemTranslation.innerHTML = data.translation;
                     poemAuthor.style.opacity = 1; poemTranslation.style.opacity = 1; calculateGravity();
                 }, 1000);
-            } catch (e) { 
-                textParticles.forEach(p => p.element.style.opacity = 1); poemAuthor.style.opacity = 1; poemTranslation.style.opacity = 1; 
-                statusEl.innerText = e.message === "Missing API Configuration" ? "请先配置 API" : "重写失败";
-            }
+            } catch (e) { textParticles.forEach(p => p.element.style.opacity = 1); poemAuthor.style.opacity = 1; poemTranslation.style.opacity = 1; statusEl.innerText = e.message === "Missing API Configuration" ? "请配置 API" : "重写失败"; }
             setTimeout(() => statusEl.style.opacity = '0', 3000);
         };
 
@@ -717,8 +566,7 @@
             ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = currentCfg.clearColor; ctx.fillRect(0, 0, width, height);
             drawEnvironment(time);
             ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < moths.length; i++) { moths[i].update(time); moths[i].draw(ctx, time); }
-            if(textParticles.length > 0) updateTextPhysics();
-            requestAnimationFrame(animate);
+            if(textParticles.length > 0) updateTextPhysics(); requestAnimationFrame(animate);
         }
         requestAnimationFrame(animate);
     </script>
