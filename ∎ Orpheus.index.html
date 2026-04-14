@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Geometric Moths & Sonnets (Typography Override)</title>
+    <style>
+        /* ==========================================================================
+           1. 纯本地 CSS: 物理重构与强制排版覆写
+           ========================================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            overflow: hidden; background-color: #0a0a0c; color: #d4d4d4;
+            font-family: "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+            touch-action: none; transition: background-color 2s ease;
+        }
+
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
+
+        /* UI 层级隔离 */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none; display: flex; justify-content: space-between;
+        }
+
+        .panel-interactive { pointer-events: auto; }
+        
+        /* 面板滤镜 */
+        .glass-panel {
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            background-color: rgba(10, 10, 12, 0.4); border-right: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), background-color 2s ease;
+        }
+
+        .scrollable { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; -webkit-overflow-scrolling: touch; }
+        .scrollable::-webkit-scrollbar { width: 4px; }
+        .scrollable::-webkit-scrollbar-track { background: transparent; }
+        .scrollable::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+        /* --- 左侧控制面板 --- */
+        #control-panel {
+            position: absolute; left: 0; top: 0; height: 100%; 
+            width: 75vw; max-width: 320px; 
+            padding: 2rem 1rem 2rem 1.5rem;
+            display: flex; flex-direction: column; gap: 0.8rem; z-index: 50; 
+        }
+        
+        .header-row { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; margin-bottom: 0.5rem;}
+        h1 { font-size: 1.5rem; font-style: italic; font-weight: normal; color: #d4d4d8; transition: color 1s ease; }
+        .close-btn { display: none; background: none; border: none; color: #71717a; font-size: 1.2rem; cursor: pointer; }
+        
+        .sys-status { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.7rem; color: #94a3b8; line-height: 1.6; }
+        .sys-status span { color: #e2e8f0; }
+        .sys-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.5rem 0; width: 100%; }
+
+        .control-btn {
+            background: transparent; border: none; border-left: 2px solid transparent;
+            text-align: left; padding: 0.5rem 0.5rem 0.5rem 0.8rem; width: 100%;
+            color: #a1a1aa; font-family: "Palatino Linotype", Georgia, serif;
+            letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease;
+        }
+        .control-btn:hover { background-color: rgba(255, 255, 255, 0.08); transform: translateX(5px); color: #e4e4e7; }
+        .btn-subtext { font-size: 0.65rem; font-style: italic; color: #71717a; display: block; margin-top: 0.2rem; }
+        .btn-highlight { border-left-color: #a3cba6; color: #d4d4d8; }
+        
+        /* LLM 接口区 */
+        .input-box {
+            width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);
+            color: #e4e4e7; padding: 0.6rem; border-radius: 4px; font-family: inherit; font-size: 0.8rem;
+            margin-bottom: 0.5rem; outline: none; transition: border-color 0.3s;
+        }
+        .input-box:focus { border-color: #a3cba6; }
+        .input-key { font-family: monospace; font-size: 0.7rem; color: #f472b6; border-color: rgba(244,114,182,0.3); }
+        .input-key:focus { border-color: #f472b6; }
+        
+        #llm-status { font-family: monospace; font-size: 0.65rem; color: #a3cba6; margin-top: 0.5rem; height: 1rem; opacity: 0; transition: opacity 0.3s; }
+        #llm-status.visible { opacity: 1; }
+        
+        .babel-btn:hover { border-left-color: #f43f5e; background-color: rgba(244,63,94,0.05); }
+        .babel-active { color: #f43f5e !important; border-left-color: #f43f5e !important; text-shadow: 0 0 8px rgba(244, 63, 94, 0.5); }
+
+        #panel-toggle {
+            position: absolute; left: 0; top: 30%; background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+            color: #a1a1aa; font-size: 0.7rem; padding: 1.5rem 0.2rem; border-radius: 0 6px 6px 0;
+            writing-mode: vertical-rl; text-orientation: mixed; cursor: pointer;
+            z-index: 40; transition: opacity 0.3s ease;
+        }
+
+        /* ==========================================================================
+           核心防御：文本展示区的物理重构 (Typography Overhaul)
+           ========================================================================== */
+        #poem-wrapper {
+            position: absolute; right: 2rem; top: 50%; transform: translateY(-50%);
+            width: 45vw; max-height: 85vh; text-align: right; z-index: 20;
+            display: flex; flex-direction: column; padding-bottom: 2rem;
+            /* 抹除所有可能的边框和背景干扰 */
+            border: none !important; background: transparent !important; outline: none !important;
+        }
+
+        #poem-canvas {
+            position: relative; width: 100%; min-height: 250px;
+            transition: color 2s ease, opacity 1s ease;
+            /* 缩小物理缓冲垫，避免外框撑爆屏幕 */
+            padding: 20px; margin: -20px; 
+            border: none !important; /* 绝对禁止出现边框 */
+        }
+
+        .char {
+            position: absolute;
+            /* 字体栈降级防御：即便到了最底层的 Serif，也要保持优雅 */
+            font-family: "Snell Roundhand", "Apple Chancery", "Brush Script MT", Georgia, "Times New Roman", serif;
+            font-style: italic;
+            
+            /* 【核心修复 1：强制瘦身】 无论什么字体，禁止加粗，强行抽取最细字重 */
+            font-weight: 100 !important; 
+            
+            letter-spacing: 0.02em;
+            transition: color 2s ease, opacity 1s ease;
+            cursor: default; user-select: none; will-change: transform, opacity; 
+            
+            /* 【核心修复 2：防止光晕被切的精细化缓冲垫】 */
+            padding: 15px; margin: -15px; 
+            line-height: 1; border: none !important;
+            
+            animation: textBreathe 6s ease-in-out infinite;
+        }
+        
+        .char.restoring { transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s ease, color 2s ease; }
+
+        @keyframes textBreathe {
+            0%, 100% { filter: drop-shadow(0 0 3px currentColor); opacity: 0.85; }
+            50% { filter: drop-shadow(0 0 10px currentColor) drop-shadow(0 0 18px currentColor); opacity: 1; }
+        }
+
+        .author-text { 
+            font-size: 0.8rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.2em; 
+            border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.8rem; margin-top: 1.5rem; 
+            display: inline-block; margin-left: auto; transition: all 2s ease; 
+        }
+        .translation-text { 
+            font-family: "Songti SC", "STSong", "SimSun", "Noto Serif SC", serif; 
+            font-size: 0.8rem; color: #71717a; letter-spacing: 0.1em; line-height: 1.8; 
+            margin-top: 1rem; transition: all 2s ease; text-shadow: 0 0 8px rgba(0,0,0,0.5); 
+        }
+
+        /* --- 移动端严酷环境适配 --- */
+        @media (max-width: 768px) {
+            #control-panel { width: 85vw; transform: translateX(-100%); padding: 1.5rem; }
+            #control-panel.open { transform: translateX(0); }
+            .close-btn { display: block; }
+            
+            /* 右侧画布物理隔离 */
+            #poem-wrapper { 
+                width: 88vw; right: 6vw; top: 8%; transform: none; 
+                max-height: 85vh; padding-top: 1rem; 
+            }
+            .author-text { font-size: 0.65rem; margin-top: 2rem; padding-top: 0.5rem;}
+            .translation-text { font-size: 0.75rem; margin-top: 1rem; line-height: 1.6;}
+            #panel-toggle { display: block; }
+        }
+        @media (min-width: 769px) { #panel-toggle { display: none !important; } }
+    </style>
+</head>
+<body>
+
+    <canvas id="mothCanvas"></canvas>
+
+    <div id="ui-layer">
+        
+        <div id="control-panel" class="panel-interactive scrollable glass-panel">
+            <div class="header-row">
+                <h1 id="panel-title">Lepidoptera</h1>
+                <button onclick="togglePanel()" class="close-btn">✕</button>
+            </div>
+
+            <div class="sys-status">
+                Render: <span>Typography Overridden</span><br>
+                Acoustics: <span style="color:#d4d4d8;">Brownian Floor Active</span><br>
+                Physics: <span style="color:#d4d4d8;">Text Entropy Active</span><br>
+                Entities: <span id="moth-counter" style="font-family:monospace; color:#fff;">0</span>
+            </div>
+
+            <button onclick="cycleSeason()" class="control-btn" style="background: rgba(255,255,255,0.05); border-radius: 4px; display: flex; justify-content: space-between;">
+                <span>[ Season: <span id="season-display" style="font-style:italic;">Summer</span> ]</span>
+                <span class="btn-subtext" style="margin:0;">环境流转</span>
+            </button>
+            
+            <button onclick="spawnMoth('luna')" class="control-btn btn-highlight">Actias luna<span class="btn-subtext" style="color:rgba(163,203,166,0.8);">月神尾蛾 | 原初莹绿</span></button>
+            <button onclick="spawnMoth('atlas')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#f97316'" onmouseout="this.style.borderLeftColor='transparent'">Attacus atlas<span class="btn-subtext">皇蛾 | 炭黑 · 赤橘</span></button>
+            <button onclick="spawnMoth('rosy')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#f472b6'" onmouseout="this.style.borderLeftColor='transparent'">Dryocampa rubicunda<span class="btn-subtext">玫瑰枫叶蛾 | 铅白 · 玫粉</span></button>
+            <button onclick="spawnMoth('deathshead')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#fbbf24'" onmouseout="this.style.borderLeftColor='transparent'">Acherontia<span class="btn-subtext">鬼脸天蛾 | 沥青 · 琥珀</span></button>
+
+            <div class="sys-divider"></div>
+
+            <button onclick="spawnMoth('comet')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#fde047'" onmouseout="this.style.borderLeftColor='transparent'">Argema mittrei<span class="btn-subtext">彗星蛾 | 银灰 · 辉黄</span></button>
+            <button onclick="spawnMoth('cinnabar')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#ef4444'" onmouseout="this.style.borderLeftColor='transparent'">Tyria jacobaeae<span class="btn-subtext">朱砂蛾 | 曜黑 · 猩红</span></button>
+            <button onclick="spawnMoth('cyan')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#22d3ee'" onmouseout="this.style.borderLeftColor='transparent'">Cyan Hawk<span class="btn-subtext">青蓝夜蛾 | 铁灰 · 霓虹蓝</span></button>
+            <button onclick="spawnMoth('orchid')" class="control-btn" style="border-left-color:transparent;" onmouseover="this.style.borderLeftColor='#d946ef'" onmouseout="this.style.borderLeftColor='transparent'">Orchid Glider<span class="btn-subtext">兰花碎影 | 暖沙 · 品红</span></button>
+
+            <button onclick="clearMoths()" class="control-btn" style="margin-top: 1rem;">[ Erase All ]<span class="btn-subtext">算力清零</span></button>
+
+            <div class="sys-divider" style="margin-top:1rem;"></div>
+            <div style="font-family:monospace; font-size:0.65rem; color:#71717a; margin-bottom:0.5rem;">COPROC: DEEPSEEK V3 / API_KEY REQ.</div>
+            
+            <input id="api-key-input" type="password" placeholder="Paste DeepSeek API Key here..." class="input-box input-key" autocomplete="off">
+            <input id="mood-input" type="text" placeholder="输入情绪碎片..." class="input-box" autocomplete="off">
+            
+            <button onclick="synthesizeMoth()" class="control-btn" onmouseover="this.style.borderLeftColor='#fff'" onmouseout="this.style.borderLeftColor='transparent'">✨ 情绪算绘<span class="btn-subtext">Synthesize Object</span></button>
+            <button onclick="rewritePoem()" class="control-btn" onmouseover="this.style.borderLeftColor='#fff'" onmouseout="this.style.borderLeftColor='transparent'">✨ 重构引力场<span class="btn-subtext">Rewrite Coordinates</span></button>
+            
+            <button id="babel-btn" onclick="toggleBabelProtocol()" class="control-btn babel-btn" style="margin-top: 0.5rem;">[ The Babel Protocol ]<span class="btn-subtext" style="font-family:monospace;">启用语言坍缩</span></button>
+
+            <div id="llm-status">Processing...</div>
+            <div style="height: 2rem; flex-shrink: 0;"></div>
+        </div>
+
+        <div id="panel-toggle" onclick="togglePanel()">[+] MENU</div>
+
+        <div id="poem-wrapper" class="panel-interactive scrollable no-scrollbar">
+            <!-- 文字系统由 JavaScript 动态生成并注入 -->
+            <div id="poem-canvas" style="color: #e4e4e7;"></div>
+            
+            <div id="poem-author" class="author-text">Sonnet 43 — W. Shakespeare</div>
+            <div id="poem-translation" class="translation-text">
+                当合上双眼，我才看的最清，<br>
+                因为白日所见无非庸常之物；<br>
+                但在睡梦中，我却能在暗里见你。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           物理声学引擎 (Brownian Floor)
+           ========================================================================== */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx, ambientSource, ambientFilter, ambientGain, spaceLfo, spaceLfoGain; 
+        const pentatonicHigh = [440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+
+        function initAudio() {
+            if (!audioCtx) { audioCtx = new AudioContext(); setupAmbientFloor(); }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function createBrownianNoiseBuffer() {
+            const bufferSize = audioCtx.sampleRate * 5; 
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let lastOut = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                lastOut = (lastOut + (0.02 * white)) / 1.02;
+                data[i] = lastOut * 3.5; 
+            }
+            return buffer;
+        }
+
+        function setupAmbientFloor() {
+            const noise = audioCtx.createBufferSource(); noise.buffer = createBrownianNoiseBuffer(); noise.loop = true;
+            ambientFilter = audioCtx.createBiquadFilter(); ambientGain = audioCtx.createGain();
+            
+            spaceLfo = audioCtx.createOscillator(); spaceLfo.type = 'sine'; spaceLfo.frequency.value = 0.05; 
+            spaceLfoGain = audioCtx.createGain(); spaceLfoGain.gain.value = 0; 
+            spaceLfo.connect(spaceLfoGain); spaceLfoGain.connect(ambientFilter.frequency); spaceLfo.start();
+
+            ambientFilter.type = 'lowpass'; ambientFilter.frequency.value = 250;
+            spaceLfoGain.gain.value = 100; ambientGain.gain.value = 0.08; 
+
+            noise.connect(ambientFilter); ambientFilter.connect(ambientGain); ambientGain.connect(audioCtx.destination);
+            noise.start(); ambientSource = noise;
+        }
+
+        function updateAcousticFloor(season) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            spaceLfoGain.gain.cancelScheduledValues(now); spaceLfoGain.gain.setValueAtTime(0, now);
+            ambientGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+            setTimeout(() => {
+                switch(season) {
+                    case 'Summer': 
+                        ambientFilter.type = 'lowpass'; ambientFilter.frequency.setValueAtTime(250, audioCtx.currentTime);
+                        spaceLfoGain.gain.setTargetAtTime(100, audioCtx.currentTime, 0.5); ambientGain.gain.exponentialRampToValueAtTime(0.08, audioCtx.currentTime + 1); break;
+                    case 'Autumn': 
+                        ambientFilter.type = 'lowpass'; ambientFilter.frequency.setTargetAtTime(500, audioCtx.currentTime, 0.5);
+                        ambientGain.gain.exponentialRampToValueAtTime(0.06, audioCtx.currentTime + 1); startAutumnDrops(); break;
+                    case 'Winter': 
+                        ambientFilter.type = 'lowpass'; ambientFilter.frequency.setTargetAtTime(120, audioCtx.currentTime, 1);
+                        ambientGain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 1); break;
+                    case 'Spring': 
+                        ambientFilter.type = 'lowpass'; ambientFilter.frequency.setTargetAtTime(800, audioCtx.currentTime, 0.5);
+                        ambientGain.gain.exponentialRampToValueAtTime(0.04, audioCtx.currentTime + 1); startSpringChimes(); break;
+                }
+            }, 500);
+        }
+
+        function startAutumnDrops() {
+            if(seasons[currentSeasonIndex] !== 'Autumn') return;
+            const osc = audioCtx.createOscillator(); const g = audioCtx.createGain(); osc.type = 'sine';
+            const baseFreq = 500 + Math.random() * 400; osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.4, audioCtx.currentTime + 0.08);
+            g.gain.setValueAtTime(0, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 0.01); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6); 
+            osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+            setTimeout(startAutumnDrops, 1200 + Math.random() * 3000); 
+        }
+
+        function startSpringChimes() {
+            if(seasons[currentSeasonIndex] !== 'Spring') return;
+            const osc = audioCtx.createOscillator(); const g = audioCtx.createGain(); osc.type = 'sine';
+            osc.frequency.value = pentatonicHigh[Math.floor(Math.random() * pentatonicHigh.length)] * 2;
+            g.gain.setValueAtTime(0, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0.015, audioCtx.currentTime + 0.05); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5); 
+            osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 2.5);
+            setTimeout(startSpringChimes, 2000 + Math.random() * 5000); 
+        }
+
+        function playKeyClick() {
+            initAudio();
+            const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            osc.frequency.value = pentatonicHigh[Math.floor(Math.random() * (pentatonicHigh.length - 2))]; osc.type = 'sine';
+            g.gain.setValueAtTime(0, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+            osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1.2);
+        }
+
+        document.addEventListener('click', () => { if(!audioCtx) initAudio(); }, {once: true});
+
+        /* ==========================================================================
+           物理系统初始化与抗锯齿 (High-DPR)
+           ========================================================================== */
+        const canvas = document.getElementById('mothCanvas'); const ctx = canvas.getContext('2d');
+        const poemWrapper = document.getElementById('poem-wrapper'); const poemCanvas = document.getElementById('poem-canvas');
+        const poemAuthor = document.getElementById('poem-author'); const poemTranslation = document.getElementById('poem-translation');
+        const controlPanel = document.getElementById('control-panel'); const panelToggleBtn = document.getElementById('panel-toggle');
+        const seasonDisplay = document.getElementById('season-display'); const babelBtn = document.getElementById('babel-btn');
+        
+        let width, height, moths = [], gravityX, gravityY;
+        let isPanelOpen = window.innerWidth >= 768;
+
+        function calculateGravity() {
+            const poemRect = poemWrapper.getBoundingClientRect();
+            gravityX = poemRect.left + (poemRect.width / 2); gravityY = poemRect.top + poemRect.height / 2;
+        }
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            width = window.innerWidth; height = window.innerHeight;
+            canvas.width = width * dpr; canvas.height = height * dpr;
+            canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
+            ctx.scale(dpr, dpr);
+            calculateGravity();
+            
+            if (window.innerWidth >= 768) {
+                isPanelOpen = true; controlPanel.style.transform = 'translateX(0)'; panelToggleBtn.style.opacity = '0'; panelToggleBtn.style.pointerEvents = 'none';
+            } else if (!isPanelOpen) { panelToggleBtn.style.opacity = '1'; panelToggleBtn.style.pointerEvents = 'auto'; }
+        }
+        window.addEventListener('resize', resize);
+        poemWrapper.addEventListener('scroll', calculateGravity);
+
+        function setStatus(msg) {
+            const s = document.getElementById('llm-status');
+            s.innerText = msg; 
+            if(msg) s.classList.add('visible'); else s.classList.remove('visible');
+        }
+
+        /* ==========================================================================
+           环境季节流转与雪地几何修复
+           ========================================================================== */
+        const seasons = ['Summer', 'Autumn', 'Winter', 'Spring']; let currentSeasonIndex = 0; 
+        let envParticles = [], snowStartTime = 0;
+        
+        const envConfig = {
+            Summer: { clearColor: 'rgba(10, 10, 12, 0.4)', panelColor: 'rgba(10, 10, 12, 0.4)', textColor: '#e4e4e7', authorBorder: 'rgba(39, 39, 42, 0.8)', translationColor: 'rgba(113, 113, 122, 0.8)' },
+            Autumn: { clearColor: 'rgba(15, 18, 14, 0.4)', panelColor: 'rgba(15, 18, 14, 0.45)', textColor: '#d9f99d', authorBorder: 'rgba(77, 124, 15, 0.4)', translationColor: 'rgba(163, 163, 163, 0.7)' },
+            Winter: { clearColor: 'rgba(8, 9, 11, 0.4)', panelColor: 'rgba(8, 9, 11, 0.45)', textColor: '#f1f5f9', authorBorder: 'rgba(71, 85, 105, 0.5)', translationColor: 'rgba(148, 163, 184, 0.7)' },
+            Spring: { clearColor: 'rgba(22, 16, 18, 0.4)', panelColor: 'rgba(22, 16, 18, 0.45)', textColor: '#fbcfe8', authorBorder: 'rgba(190, 24, 93, 0.4)', translationColor: 'rgba(244, 114, 182, 0.6)' }
+        };
+
+        function initEnvParticles(sName) {
+            envParticles = [];
+            if(sName === 'Summer') {
+                for(let i=0; i<80; i++) envParticles.push({ angle: Math.random()*Math.PI*2, dist: 50+Math.random()*Math.max(width, height), speed: 0.0005+Math.random()*0.001, alpha: Math.random()*0.5+0.1 });
+            } else if(sName === 'Winter') {
+                snowStartTime = performance.now();
+                for(let i=0; i<150; i++) envParticles.push({ x: Math.random()*width, y: Math.random()*height, vx: (Math.random()-0.5)*1.5, vy: Math.random()*1.5+0.5, radius: Math.random()*1.5+0.5, alpha: Math.random()*0.6+0.2 });
+            } else if(sName === 'Spring') {
+                for(let i=0; i<60; i++) envParticles.push({ x: Math.random()*width, y: Math.random()*height, vx: (Math.random()-0.5)*2, vy: Math.random()*1+0.8, radius: Math.random()*2+1, angle: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.1 });
+            }
+        }
+
+        function drawEnvironment(time) {
+            const sName = seasons[currentSeasonIndex];
+            if (sName === 'Summer') {
+                ctx.lineWidth = 1.5;
+                envParticles.forEach(p => {
+                    p.angle += p.speed; const tailAngle = p.angle - (p.speed * 150); 
+                    ctx.beginPath(); ctx.arc(gravityX, gravityY, p.dist, tailAngle, p.angle);
+                    ctx.strokeStyle = `rgba(255,255,255,${p.alpha * 0.3})`; ctx.stroke();
+                });
+            } else if (sName === 'Autumn') {
+                if(Math.random() < 0.02) envParticles.push({ x: Math.random() * width, y: Math.random() * height, radius: 1, maxRadius: 50 + Math.random() * 100, alpha: 0.6 });
+                for(let i=envParticles.length-1; i>=0; i--) {
+                    let p = envParticles[i]; p.radius += 0.5; p.alpha -= 0.005;
+                    if(p.alpha <= 0) { envParticles.splice(i, 1); continue; }
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(180, 190, 150, ${p.alpha * 0.5})`; ctx.lineWidth = 1; ctx.stroke();
+                }
+            } else if (sName === 'Winter') {
+                ctx.fillStyle = '#ffffff';
+                envParticles.forEach(p => {
+                    p.y += p.vy; p.x += Math.sin(time * 0.001 + p.y * 0.01) * 0.5 + p.vx; 
+                    if(p.y > height) { p.y = -10; p.x = Math.random() * width; }
+                    if(p.x > width) p.x = 0; else if(p.x < 0) p.x = width;
+                    ctx.globalAlpha = p.alpha; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill();
+                });
+                ctx.globalAlpha = 1.0;
+                
+                const elapsed = time - snowStartTime; const maxSnowHeight = height / 9; const duration = 120000; 
+                const currentHeight = Math.min(maxSnowHeight, (elapsed / duration) * maxSnowHeight);
+                
+                if (currentHeight > 0) {
+                    // 几何边界强制延伸到超出屏幕，避免裁切现象
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'; ctx.beginPath(); ctx.moveTo(0, height);
+                    for (let x = 0; x <= width + 60; x += 20) { let wave = Math.sin(x * 0.01 + time * 0.0005) * 5; ctx.lineTo(x, height - currentHeight + wave); }
+                    ctx.lineTo(width + 60, height); ctx.lineTo(0, height); ctx.closePath(); ctx.fill();
+                    
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'; ctx.beginPath(); ctx.moveTo(0, height);
+                    for (let x = 0; x <= width + 60; x += 30) { let wave = Math.cos(x * 0.015 - time * 0.0002) * 8; ctx.lineTo(x, height - currentHeight + wave + 4); }
+                    ctx.lineTo(width + 60, height); ctx.lineTo(0, height); ctx.closePath(); ctx.fill();
+                }
+            } else if (sName === 'Spring') {
+                envParticles.forEach(p => {
+                    p.y += p.vy; p.x += p.vx + Math.sin(time * 0.002) * 0.5; p.angle += p.rotSpeed;
+                    if(p.y > height + 20) p.y = -20; else if(p.y < -20) p.y = height + 20;
+                    if(p.x > width + 20) p.x = -20; else if(p.x < -20) p.x = width + 20;
+                    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+                    ctx.globalAlpha = 0.5; ctx.fillStyle = '#fbcfe8'; ctx.beginPath(); ctx.ellipse(0, 0, p.radius, p.radius * 0.5, 0, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                });
+            }
+        }
+
+        function cycleSeason() {
+            playKeyClick(); currentSeasonIndex = (currentSeasonIndex + 1) % seasons.length; const sName = seasons[currentSeasonIndex];
+            seasonDisplay.innerText = sName;
+            poemCanvas.style.color = envConfig[sName].textColor; poemAuthor.style.color = envConfig[sName].textColor;
+            poemAuthor.style.borderColor = envConfig[sName].authorBorder; poemTranslation.style.color = envConfig[sName].translationColor;
+            controlPanel.style.backgroundColor = envConfig[sName].panelColor;
+            updateAcousticFloor(sName); initEnvParticles(sName);
+        }
+
+        function togglePanel() {
+            playKeyClick(); isPanelOpen = !isPanelOpen;
+            controlPanel.style.transform = isPanelOpen ? 'translateX(0)' : 'translateX(-100%)';
+            panelToggleBtn.style.opacity = isPanelOpen ? '0' : '1';
+            panelToggleBtn.style.pointerEvents = isPanelOpen ? 'none' : 'auto';
+        }
+
+        /* ==========================================================================
+           【绝对防御】排版重构：动态视距宽度映射 (vw) 与极端瘦身
+           ========================================================================== */
+        let textParticles = [], isBabelActive = false;
+        const alienChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzàâäæçèéêëîïôœùûüÿ0123456789§¶†‡";
+        const defaultPoem = ["\"When most I wink,", "then do mine eyes best see,", "For all the day", "they view things unrespected;", "But when I sleep,", "in dreams they look on thee...\""];
+
+        function initTextPhysics(lines) {
+            poemCanvas.innerHTML = ''; textParticles = [];
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute'; tempDiv.style.visibility = 'hidden'; tempDiv.style.whiteSpace = 'nowrap';
+            
+            // 复制核心排版约束以供精确测距
+            tempDiv.style.fontFamily = '"Snell Roundhand", "Apple Chancery", "Brush Script MT", Georgia, "Times New Roman", serif';
+            tempDiv.style.fontStyle = 'italic'; 
+            tempDiv.style.fontWeight = '100'; // 强制极细字重
+            tempDiv.style.letterSpacing = '0.02em';
+            
+            const isMobile = window.innerWidth < 768;
+            
+            // 核心防御：废弃 rem，使用基于视区宽度的 vw 单位，确保任何字体都不会爆出屏幕
+            const fontSizeVw = isMobile ? 8 : 4; 
+            const fontSizePx = (window.innerWidth * fontSizeVw) / 100;
+            
+            // 设定一个合理的上下限
+            const finalFontSize = Math.min(Math.max(fontSizePx, 24), 60);
+            
+            tempDiv.style.fontSize = `${finalFontSize}px`;
+            poemCanvas.appendChild(tempDiv);
+
+            let currentY = 0; 
+            // 行高动态适配
+            const lineHeight = finalFontSize * (isMobile ? 1.5 : 1.6); 
+
+            lines.forEach((line) => {
+                let currentX = 0; const chars = Array.from(line);
+                tempDiv.innerText = line; const lineWidth = tempDiv.offsetWidth;
+                
+                // poemCanvas 的真实可用宽度
+                const effectiveWidth = poemCanvas.offsetWidth; 
+                // 右对齐起点
+                currentX = effectiveWidth - lineWidth; 
+
+                chars.forEach((char) => {
+                    // 空格宽度也按比例算
+                    if (char === ' ') { currentX += finalFontSize * 0.25; return; }
+                    
+                    tempDiv.innerText = char; const charWidth = tempDiv.offsetWidth;
+                    const span = document.createElement('span');
+                    span.innerText = char; span.className = 'char';
+                    span.style.fontSize = `${finalFontSize}px`;
+                    
+                    span.style.left = `${currentX}px`; span.style.top = `${currentY}px`;
+                    poemCanvas.appendChild(span);
+
+                    textParticles.push({ element: span, char: char, originX: currentX, originY: currentY, x: currentX, y: currentY, vx: 0, vy: 0, isRestoring: false });
+                    currentX += charWidth;
+                });
+                currentY += lineHeight;
+            });
+            poemCanvas.style.height = `${currentY + 20}px`; poemCanvas.removeChild(tempDiv);
+            calculateGravity(); 
+        }
+
+        function updateTextPhysics() {
+            const canvasRect = poemCanvas.getBoundingClientRect();
+            textParticles.forEach(p => {
+                if (p.isRestoring) return;
+                p.vx += (Math.random() - 0.5) * 0.05; p.vy += (Math.random() - 0.5) * 0.05; 
+                p.vx += (p.originX - p.x) * 0.001; p.vy += (p.originY - p.y) * 0.001; 
+                
+                moths.forEach(m => {
+                    const localMothX = m.x - canvasRect.left - 20; 
+                    const localMothY = m.y - canvasRect.top - 20;
+                    const dx = p.x - localMothX; const dy = p.y - localMothY; const distSq = dx*dx + dy*dy;
+                    if (distSq < 3600) { 
+                        const dist = Math.sqrt(distSq); const force = (60 - dist) / 60;
+                        p.vx += (dx / dist) * force * 1.5; p.vy += (dy / dist) * force * 1.5;
+                    }
+                });
+                p.vx *= 0.92; p.vy *= 0.92; p.x += p.vx; p.y += p.vy;
+
+                if (isBabelActive) {
+                    const distFromOrigin = Math.sqrt((p.x - p.originX)**2 + (p.y - p.originY)**2);
+                    if (distFromOrigin > 20 && Math.random() < 0.05) { p.element.innerText = alienChars[Math.floor(Math.random() * alienChars.length)]; p.element.style.opacity = 0.5; }
+                }
+                p.element.style.transform = `translate(${p.x - p.originX}px, ${p.y - p.originY}px)`;
+            });
+        }
+
+        function restoreText(e) {
+            const canvasRect = poemCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const localMouseX = clientX - canvasRect.left - 20; const localMouseY = clientY - canvasRect.top - 20;
+
+            textParticles.forEach(p => {
+                const dx = p.x - localMouseX; const dy = p.y - localMouseY;
+                if (dx*dx + dy*dy < 10000) {
+                    p.isRestoring = true; p.x = p.originX; p.y = p.originY; p.vx = 0; p.vy = 0;
+                    p.element.classList.add('restoring'); p.element.style.transform = `translate(0px, 0px)`;
+                    if (isBabelActive) { p.element.innerText = p.char; p.element.style.opacity = 1; }
+                    setTimeout(() => { p.isRestoring = false; p.element.classList.remove('restoring'); }, 500);
+                }
+            });
+        }
+        poemWrapper.addEventListener('mousemove', restoreText);
+        poemWrapper.addEventListener('touchmove', (e) => { restoreText(e); }, {passive: false});
+
+        function toggleBabelProtocol() {
+            playKeyClick(); isBabelActive = !isBabelActive; const btn = document.getElementById('babel-btn');
+            if (isBabelActive) { btn.classList.add('babel-active'); btn.innerHTML = `[ The Babel Protocol ]<span class="btn-subtext">警告：意义坍缩中...</span>`; } 
+            else { btn.classList.remove('babel-active'); btn.innerHTML = `[ The Babel Protocol ]<span class="btn-subtext" style="font-family:monospace;">启用语言坍缩</span>`; textParticles.forEach(p => { p.element.innerText = p.char; p.element.style.opacity = 1; }); }
+        }
+
+        /* ==========================================================================
+           蛾类物理引擎
+           ========================================================================== */
+        const speciesData = {
+            luna: { bodyColor: '#3c4a3e', colors: ['#a3cba6', '#c8e6c9', '#8ebd91'], baseAlpha: 0.8, scale: 1.5, mass: 1.0, flapSpeed: 0.15, geometry: { forewing: [[0,0], [30,-40], [60,-20], [40,10], [0,0]], hindwing: [[0,0], [35,10], [20,60], [10,40], [0,0]], accent: [[25,-15], [40,-5], [30,5]] }, flightBehavior: function(m, t) { m.vx += Math.sin(t*0.5)*0.2; m.vy += Math.cos(t*0.3)*0.15; m.vx += (gravityX-m.x)*0.0001; m.vy += (gravityY-m.y)*0.0001; } },
+            atlas: { bodyColor: '#09090b', colors: ['#27272a', '#18181b', '#f97316'], baseAlpha: 0.65, scale: 2.2, mass: 2.5, flapSpeed: 0.08, geometry: { forewing: [[0,0], [50,-30], [80,-10], [60,20], [20,10]], hindwing: [[0,0], [40,15], [50,40], [20,30], [0,0]], accent: [[60,-5], [70,5], [50,15]] }, flightBehavior: function(m, t) { m.vx += Math.sin(t*0.2)*0.1; m.vy += Math.cos(t*0.15)*0.1; m.vy += 0.05; m.vx += (gravityX-m.x)*0.00005; m.vy += (gravityY-m.y)*0.0001; } },
+            rosy: { bodyColor: '#3f3f46', colors: ['#d4d4d8', '#a1a1aa', '#f472b6'], baseAlpha: 0.8, scale: 0.6, mass: 0.4, flapSpeed: 0.4, geometry: { forewing: [[0,0], [20,-20], [35,0], [20,15], [0,0]], hindwing: [[0,0], [15,10], [20,25], [5,20], [0,0]], accent: [[10,-5], [25,0], [15,5]] }, flightBehavior: function(m, t) { m.vx += (Math.random()-0.5)*0.8; m.vy += (Math.random()-0.5)*0.8; m.vx += (gravityX-m.x)*0.0005; m.vy += (gravityY-m.y)*0.0005; } },
+            deathshead: { bodyColor: '#000000', colors: ['#1c1917', '#292524', '#fbbf24'], baseAlpha: 0.7, scale: 1.2, mass: 1.5, flapSpeed: 0.25, geometry: { forewing: [[0,0], [25,-35], [50,-10], [30,15], [0,0]], hindwing: [[0,0], [25,5], [30,25], [10,15], [0,0]], accent: [[15,-10], [30,-5], [20,5]] }, flightBehavior: function(m, t) { if(Math.random()<0.02){ m.targetVx = (gravityX-m.x)*0.01; m.targetVy = (gravityY-m.y)*0.01; } m.vx += (m.targetVx-m.vx)*0.1; m.vy += (m.targetVy-m.vy)*0.1; } },
+            comet: { bodyColor: '#1e293b', colors: ['#cbd5e1', '#94a3b8', '#fde047'], baseAlpha: 0.4, scale: 1.8, mass: 0.8, flapSpeed: 0.14, geometry: { forewing: [[0,0], [25,-45], [55,-15], [30,10], [0,0]], hindwing: [[0,0], [15,5], [8,40], [4,80], [2,110], [0,80], [2,40], [0,0]], accent: [[15,-15], [30,-10], [20,5]] }, flightBehavior: function(m, t) { m.vx += Math.sin(t*0.4)*0.25; m.vy += Math.cos(t*0.2)*0.2; m.vx += (gravityX-m.x)*0.0001; m.vy += (gravityY-m.y)*0.0001; } },
+            cinnabar: { bodyColor: '#000000', colors: ['#18181b', '#09090b', '#ef4444'], baseAlpha: 0.85, scale: 1.1, mass: 0.9, flapSpeed: 0.2, geometry: { forewing: [[0,0], [25,-25], [40,-5], [25,20], [0,0]], hindwing: [[0,0], [25,15], [30,35], [10,30], [0,0]], accent: [[15,15], [25,25], [10,20]] }, flightBehavior: function(m, t) { m.vx += Math.cos(t*0.3)*0.15; m.vy += Math.sin(t*0.5)*0.15; m.vx += (gravityX-m.x)*0.0002; m.vy += (gravityY-m.y)*0.0002; } },
+            cyan: { bodyColor: '#27272a', colors: ['#52525b', '#3f3f46', '#22d3ee'], baseAlpha: 0.55, scale: 1.0, mass: 0.6, flapSpeed: 0.5, geometry: { forewing: [[0,0], [15,-45], [45,-5], [10,5], [0,0]], hindwing: [[0,0], [15,0], [20,20], [5,10], [0,0]], accent: [[10,-20], [25,-10], [5,-5]] }, flightBehavior: function(m, t) { if(t%80<10){ m.vx += (gravityX-m.x)*0.01+(Math.random()-0.5)*8; m.vy += (gravityY-m.y)*0.01+(Math.random()-0.5)*8; } m.vx *= 0.9; m.vy *= 0.9; } },
+            orchid: { bodyColor: '#44403c', colors: ['#a8a29e', '#78716c', '#d946ef'], baseAlpha: 0.6, scale: 0.9, mass: 0.5, flapSpeed: 0.3, geometry: { forewing: [[0,0], [15,-20], [25,-25], [35,-10], [30,0], [40,10], [20,15], [0,0]], hindwing: [[0,0], [20,5], [30,15], [15,25], [20,35], [5,20], [0,0]], accent: [[15,-5], [25,-10], [20,5]] }, flightBehavior: function(m, t) { m.vx += (Math.random()-0.5)*0.5; m.vy += (Math.random()-0.5)*0.5-0.05; m.vx += (gravityX-m.x)*0.0003; m.vy += (gravityY-m.y)*0.0003; } }
+        };
+
+        class Moth {
+            constructor(type, startX, startY) {
+                this.type = type; this.data = speciesData[type]; this.x = startX; this.y = startY;
+                this.vx = (Math.random()-0.5)*2; this.vy = (Math.random()-0.5)*2; this.angle = 0;
+                this.phaseOffset = Math.random()*Math.PI*2; this.orbitRadius = 40+Math.random()*250; this.orbitAngle = Math.random()*Math.PI*2;
+            }
+            update(time) {
+                let mTime = time*0.01 + this.phaseOffset; let dx = gravityX-this.x; let dy = gravityY-this.y; let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 350) {
+                    this.orbitAngle += 0.008; this.vx += (gravityX + Math.cos(this.orbitAngle)*this.orbitRadius - this.x)*0.001; this.vy += (gravityY + Math.sin(this.orbitAngle)*this.orbitRadius - this.y)*0.001;
+                    this.data.flightBehavior(this, mTime); this.vx *= 0.94; this.vy *= 0.94;
+                } else { this.data.flightBehavior(this, mTime); }
+                this.vx *= 0.98; this.vy *= 0.98; this.x += this.vx; this.y += this.vy;
+                let targetAngle = Math.atan2(this.vy, this.vx); let diff = targetAngle - this.angle;
+                while(diff>Math.PI) diff-=Math.PI*2; while(diff<-Math.PI) diff+=Math.PI*2; this.angle += diff*0.1;
+            }
+            draw(ctx, time) {
+                ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle+Math.PI/2);
+                const scaleModifier = window.innerWidth<768 ? 0.75 : 1; ctx.scale(this.data.scale*scaleModifier, this.data.scale*scaleModifier);
+                let flap = Math.sin((time*this.data.flapSpeed)+this.phaseOffset); let wingScaleX = Math.abs(flap)*0.8+0.2; 
+                ctx.fillStyle = this.data.bodyColor; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.ellipse(0, 0, 3, 12, 0, 0, Math.PI*2); ctx.fill();
+                const drawSide = (scaleX) => {
+                    ctx.save(); ctx.scale(scaleX, 1); ctx.globalAlpha = this.data.baseAlpha;
+                    this.drawWingPolygon(ctx, this.data.geometry.forewing, this.data.colors[0]); this.drawWingPolygon(ctx, this.data.geometry.hindwing, this.data.colors[1]);
+                    if(this.data.geometry.accent) { ctx.globalAlpha=0.9; ctx.shadowColor=this.data.colors[2]; ctx.shadowBlur=8; this.drawWingPolygon(ctx, this.data.geometry.accent, this.data.colors[2]); ctx.shadowBlur=0; } ctx.restore();
+                };
+                drawSide(-wingScaleX); drawSide(wingScaleX);  
+                ctx.globalAlpha = 0.15; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(8*wingScaleX,0); ctx.lineTo(0,8); ctx.lineTo(-8*wingScaleX,0); ctx.fill(); ctx.restore();
+            }
+            drawWingPolygon(ctx, points, color) { ctx.fillStyle=color; ctx.beginPath(); for(let i=0; i<points.length; i++) { if(i===0) ctx.moveTo(points[i][0], points[i][1]); else ctx.lineTo(points[i][0], points[i][1]); } ctx.closePath(); ctx.fill(); }
+        }
+
+        window.spawnMoth = function(type) {
+            playKeyClick();
+            let startX = window.innerWidth<768 ? 20 : 300+Math.random()*50;
+            let startY = window.innerWidth<768 ? height-100 : height/2+(Math.random()-0.5)*400;
+            moths.push(new Moth(type, startX, startY));
+            document.getElementById('moth-counter').innerText = moths.length;
+        };
+
+        window.clearMoths = function() { playKeyClick(); moths = []; document.getElementById('moth-counter').innerText = 0; ctx.clearRect(0, 0, width, height); };
+
+        /* ==========================================================================
+           DeepSeek API 物理直连
+           ========================================================================== */
+        async function fetchDeepSeek(promptMsg, jsonSchemaStr) {
+            const apiKey = document.getElementById('api-key-input').value.trim();
+            if(!apiKey) { setStatus("API Key 缺失。"); throw new Error("No API Key"); }
+            
+            const url = "https://api.deepseek.com/chat/completions";
+            const payload = {
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: `You are an engine calculating moth physics and poetry. Return ONLY strict JSON matching this structure: ${jsonSchemaStr}. Do not wrap in markdown tags like \`\`\`json.` },
+                    { role: "user", content: promptMsg }
+                ],
+                response_format: { type: "json_object" }
+            };
+
+            const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error("API 请求阻断");
+            const resData = await response.json();
+            return JSON.parse(resData.choices[0].message.content);
+        }
+
+        window.synthesizeMoth = async function() {
+            playKeyClick(); const input = document.getElementById('mood-input').value || "微弱的混乱"; setStatus("DeepSeek 算力涌入...");
+            try {
+                const schema = "{ id(string), name(string), bodyColor(hex), c1(hex), c2(hex), accent(hex), flapSpeed(0.05-0.9), mass(0.2-2.5) }";
+                const data = await fetchDeepSeek(`情绪：“${input}”。转为虚拟飞蛾参数。`, schema);
+                speciesData[data.id] = { bodyColor: data.bodyColor, colors: [data.c1, data.c2, data.accent], baseAlpha: 0.7, scale: 0.8+(data.mass*0.3), mass: data.mass, flapSpeed: data.flapSpeed, geometry: speciesData['luna'].geometry, flightBehavior: function(m, t) { m.vx+=(Math.random()-0.5)*data.flapSpeed; m.vy+=(Math.random()-0.5)*data.flapSpeed; } };
+                spawnMoth(data.id); document.getElementById('mood-input').value = ""; setStatus(`实装完成: ${data.name}`);
+            } catch (e) { if(e.message !== "No API Key") setStatus("节点同步失败。"); } setTimeout(() => setStatus(""), 3000);
+        };
+
+        window.rewritePoem = async function() {
+            playKeyClick(); setStatus("物理引力场解构中...");
+            textParticles.forEach(p => p.element.style.opacity = 0); poemAuthor.style.opacity = 0; poemTranslation.style.opacity = 0;
+            try {
+                const schema = "{ poemLines: [string], author: string, translation: string }";
+                const data = await fetchDeepSeek("写4-6行英文短诗，关于混乱、距离或重构。十四行诗风格。必须提供优美的中文翻译和作者署名。", schema);
+                setTimeout(() => {
+                    initTextPhysics(data.poemLines); poemAuthor.innerText = data.author;
+                    poemTranslation.innerHTML = data.translation.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+                    poemAuthor.style.opacity = 1; poemTranslation.style.opacity = 1; calculateGravity(); setStatus("");
+                }, 1000);
+            } catch (e) { textParticles.forEach(p => p.element.style.opacity = 1); poemAuthor.style.opacity = 1; poemTranslation.style.opacity = 1; if(e.message !== "No API Key") setStatus("重写进程被拒。"); } setTimeout(() => setStatus(""), 3000);
+        };
+
+        // --- Init & Loop ---
+        resize(); initEnvParticles('Summer'); 
+        setTimeout(() => { initTextPhysics(defaultPoem); spawnMoth('luna'); }, 500);
+
+        function animate(time) {
+            const currentCfg = envConfig[seasons[currentSeasonIndex]];
+            ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = currentCfg.clearColor; ctx.fillRect(0, 0, width, height);
+            drawEnvironment(time);
+            ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < moths.length; i++) { moths[i].update(time); moths[i].draw(ctx, time); }
+            if(textParticles.length > 0) updateTextPhysics();
+            requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
